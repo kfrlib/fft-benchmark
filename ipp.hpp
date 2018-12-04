@@ -13,51 +13,14 @@
 #include "ipp/ipps.h"
 #include <string>
 
-inline bool init_ipp() { return ippInit() == ippStsOk;}
+inline bool init_ipp() { return ippInit() == ippStsOk; }
 inline void init() { static bool ok = init_ipp(); }
 
 #ifdef TYPE_FLOAT
-
-template <bool invert>
-class fft_benchmark
-{
-public:
-    fft_benchmark(size_t size, real* out, const real* in) : out(out), in(in)
-    {
-        init();
-        ippsDFTInitAlloc_C_32fc(&plan, size, IPP_FFT_NODIV_BY_ANY, ippAlgHintAccurate);
-        int bufsize = 0;
-        ippsDFTGetBufSize_C_32fc(plan, &bufsize);
-        temp = bufsize ? ippsMalloc_8u(bufsize) : NULL;
-    }
-    static std::string name()
-    {
-        init();
-        const IppLibraryVersion* ver = ippsGetLibVersion();
-        return std::string(ver->Name) + ver->Version;
-    }
-    static std::string shortname() { return "IPP"; }
-    void execute()
-    {
-        if (invert)
-            ippsDFTInv_CToC_32fc((const Ipp32fc*)this->out, (Ipp32fc*)this->out, plan, temp);
-        else
-            ippsDFTFwd_CToC_32fc((const Ipp32fc*)this->out, (Ipp32fc*)this->out, plan, temp);
-    }
-    ~fft_benchmark()
-    {
-        ippsDFTFree_C_32fc(plan);
-        ippsFree(temp);
-    }
-
-private:
-    IppsDFTSpec_C_32fc* plan;
-    real* out;
-    const real* in;
-    Ipp8u* temp;
-};
-
+#define IPPSUFFIX(name) name##32fc
 #else
+#define IPPSUFFIX(name) name##64fc
+#endif
 
 template <bool invert>
 class fft_benchmark
@@ -66,9 +29,21 @@ public:
     fft_benchmark(size_t size, real* out, const real* in) : out(out), in(in)
     {
         init();
-        ippsDFTInitAlloc_C_64fc(&plan, size, IPP_FFT_NODIV_BY_ANY, ippAlgHintAccurate);
-        int bufsize = 0;
-        ippsDFTGetBufSize_C_64fc(plan, &bufsize);
+//        ippSetCpuFeatures(ippCPUID_MMX | ippCPUID_SSE | ippCPUID_SSE2 | ippCPUID_SSE3 | ippCPUID_SSSE3 |
+//                          ippCPUID_MOVBE | ippCPUID_SSE41 | ippCPUID_SSE42 | ippCPUID_AES | ippCPUID_CLMUL |
+//                          ippCPUID_SHA | ippCPUID_AVX | ippAVX_ENABLEDBYOS | ippCPUID_RDRAND | ippCPUID_F16C |
+//                          ippCPUID_AVX2 | ippCPUID_MOVBE | ippCPUID_ADCOX | ippCPUID_RDSEED |
+//                          ippCPUID_PREFETCHW
+//        );
+
+        int specsize = 0;
+        int initsize = 0;
+        int bufsize  = 0;
+        IPPSUFFIX(ippsDFTGetSize_C_)
+        (size, IPP_FFT_NODIV_BY_ANY, ippAlgHintAccurate, &specsize, &initsize, &bufsize);
+        initmem = initsize ? ippsMalloc_8u(initsize) : NULL;
+        plan    = (IPPSUFFIX(IppsDFTSpec_C_)*)ippsMalloc_8u(specsize);
+        IPPSUFFIX(ippsDFTInit_C_)(size, IPP_FFT_NODIV_BY_ANY, ippAlgHintAccurate, plan, initmem);
         temp = bufsize ? ippsMalloc_8u(bufsize) : NULL;
     }
     static std::string name()
@@ -81,20 +56,22 @@ public:
     void execute()
     {
         if (invert)
-            ippsDFTInv_CToC_64fc((const Ipp64fc*)this->out, (Ipp64fc*)this->out, plan, temp);
-        else
-            ippsDFTFwd_CToC_64fc((const Ipp64fc*)this->out, (Ipp64fc*)this->out, plan, temp);
+            IPPSUFFIX(ippsDFTInv_CToC_)
+        ((const IPPSUFFIX(Ipp)*)this->out, (IPPSUFFIX(Ipp)*)this->out, plan, temp);
+        else IPPSUFFIX(ippsDFTFwd_CToC_)((const IPPSUFFIX(Ipp)*)this->out, (IPPSUFFIX(Ipp)*)this->out, plan,
+                                         temp);
     }
     ~fft_benchmark()
     {
-        ippsDFTFree_C_64fc(plan);
+        ippsFree(initmem);
         ippsFree(temp);
+        ippsFree(plan);
     }
 
 private:
-    IppsDFTSpec_C_64fc* plan;
+    IPPSUFFIX(IppsDFTSpec_C_) * plan;
     real* out;
     const real* in;
     Ipp8u* temp;
+    Ipp8u* initmem;
 };
-#endif

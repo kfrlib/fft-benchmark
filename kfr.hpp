@@ -23,7 +23,7 @@ public:
     static std::string shortname() { return "KFR"; }
     void execute()
     {
-         plan.execute(kfr::complex_cast(out), kfr::complex_cast(in), temp, kfr::cbool<invert>);
+         plan.execute(kfr::ptr_cast<kfr::complex<real>>(out), kfr::ptr_cast<kfr::complex<real>>(in), temp, kfr::cbool<invert>);
     }
     ~fft_benchmark() { kfr::aligned_deallocate(temp); }
 private:

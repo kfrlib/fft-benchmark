@@ -32,9 +32,9 @@ void fill_random(real* in, size_t size)
         in[i]     = ((double)rand() / RAND_MAX) * 2.0 - 1.0;
 }
 
-void test_fft(size_t size, double time = 1.0)
+void test_fft(size_t size, double time = 1.5)
 {
-    const tick_value correction = calibrate_correction();
+    const tick_value correction = 0;//calibrate_correction();
     printf(">  [%9ld, ", (long)size);
     real* in  = aligned_malloc<real>(size * 2);
     real* out = aligned_malloc<real>(size * 2);
@@ -65,29 +65,29 @@ void test_fft(size_t size, double time = 1.0)
     const double tick_frequency =
         (long double)(bench_tick_stop - bench_tick_start) / time_between(bench_stop, bench_start);
 
-    tick_value tick_median = get_median(measures);
-    double time_median     = tick_median / tick_frequency;
-    const double flops     = (5.0 * size * std::log((double)size) / (std::log(2.0) * time_median));
+    tick_value tick_value = get_minimum(measures);
+    double time_value     = tick_value / tick_frequency;
+    const double flops     = (5.0 * size * std::log((double)size) / (std::log(2.0) * time_value));
 
     const char* units = "'s' ";
-    if (time_median < 0.000001)
+    if (time_value < 0.000001)
     {
         units       = "'ns'";
-        time_median = time_median * 1000000000.0;
+        time_value = time_value * 1000000000.0;
     }
-    else if (time_median < 0.001)
+    else if (time_value < 0.001)
     {
         units       = "'us'";
-        time_median = time_median * 1000000.0;
+        time_value = time_value * 1000000.0;
     }
-    else if (time_median < 1.0)
+    else if (time_value < 1.0)
     {
         units       = "'ms'";
-        time_median = time_median * 1000.0;
+        time_value = time_value * 1000.0;
     }
 
-    printf("%9lld, ", tick_median);
-    printf("%7g, %s, ", time_median, units);
+    printf("%9lld, ", tick_value);
+    printf("%7g, %s, ", time_value, units);
     printf("%7g, ", flops / 1000000.0);
     printf("%8lld, ", measures.size());
     printf("%8.6f],\n", tick_frequency / 1000000000.0);
@@ -110,7 +110,7 @@ int main(int argc, char** argv)
 {
     set_affinity();
     printf("FFT/DFT benchmarking tool\n");
-    printf("Copyright (C) 2016 D Levin http://www.kfrlib.com\n");
+    printf("Copyright (C) 2016 D Levin https://www.kfrlib.com\n");
     printf("Benchmark source code is dual-licensed under MIT and GPL 2 or later\n");
     printf("Individual DFT/FFT algorithms have its own licenses. See its source code for details\n");
     printf("Usage:\n        %s <size> <size> ... <size>\n\n", execfile(argv).c_str());
@@ -125,7 +125,7 @@ int main(int argc, char** argv)
         if (size > 1)
             test_fft(size);
         else
-            printf("Incorrect size: %ld\n", size);
+            printf("Incorrect size: %s\n", argv[i]);
     }
     printf(">]\n");
     return 0;

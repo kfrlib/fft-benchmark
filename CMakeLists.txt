@@ -15,9 +15,12 @@ endif ()
 
 project(fft_benchmark)
 
+include_directories(include)
+
 set( CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin )
 
-add_compile_options(-fno-exceptions -fno-rtti -mavx -Wno-deprecated-declarations)
+add_compile_options(-fno-exceptions -fno-rtti -mllvm -x86-use-vzeroupper=0 -march=native -Wno-deprecated-declarations)
+ # -march=skylake-avx512
 
 option(ENABLE_KFR     "Enable KFR"     ON)
 option(ENABLE_KISSFFT "Enable KissFFT" ON)
@@ -25,12 +28,17 @@ option(ENABLE_FFTW    "Enable FFTW"    ON)
 option(ENABLE_IPP     "Enable IPP"     ON)
 
 link_directories(bin)
+link_directories(lib)
 
 if (ENABLE_KFR)
-    add_executable(fft_benchmark_kfr_double fft_benchmark.cpp benchmark.hpp kfr.hpp)
+    set(DFT_SRC
+            include/kfr/dft/impl/dft-impl-f32.cpp
+            include/kfr/dft/impl/dft-impl-f64.cpp)
+    #set(DFT_SRC )
+    add_executable(fft_benchmark_kfr_double fft_benchmark.cpp benchmark.hpp kfr.hpp ${DFT_SRC})
     target_compile_definitions(fft_benchmark_kfr_double PRIVATE FFT_TEST="kfr.hpp")
     target_compile_options(fft_benchmark_kfr_double PRIVATE -std=c++1y)
-    add_executable(fft_benchmark_kfr_float fft_benchmark.cpp benchmark.hpp kfr.hpp)
+    add_executable(fft_benchmark_kfr_float fft_benchmark.cpp benchmark.hpp kfr.hpp ${DFT_SRC})
     target_compile_definitions(fft_benchmark_kfr_float PRIVATE FFT_TEST="kfr.hpp" TYPE_FLOAT=1)
     target_compile_options(fft_benchmark_kfr_float PRIVATE -std=c++1y)
 endif ()
