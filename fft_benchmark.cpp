@@ -38,9 +38,9 @@ void test_fft(size_t size, double time = 1.5)
     printf(">  [%9ld, ", (long)size);
     real* in  = aligned_malloc<real>(size * 2);
     real* out = aligned_malloc<real>(size * 2);
+    fft_benchmark<false> fft(size, out, out);
     fill_random(in, size * 2);
     std::copy(in, in + size * 2, out);
-    fft_benchmark<false> fft(size, out, out);
 
     fft.execute();
     fill_random(in, size * 2);

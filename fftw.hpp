@@ -23,7 +23,7 @@ public:
                                ( fftwf_complex* )in,
                                ( fftwf_complex* )out,
                                invert ? FFTW_BACKWARD : FFTW_FORWARD,
-                               FFTW_ESTIMATE );
+                               FFTW_MEASURE );
     }
     static std::string name() { return fftwf_version; }
     static std::string shortname() { return "FFTW"; }
