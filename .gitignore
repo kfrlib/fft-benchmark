@@ -1,0 +1,15 @@
+# build directory
+build*
+bin/
+
+ipp/*
+fftw/*
+kissfft/*
+kfr/*
+
+data*
+include
+
+.cache
+img
+.vscode

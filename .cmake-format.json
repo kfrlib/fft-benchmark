@@ -1,0 +1,16 @@
+{
+    "line_width": 120,
+    "tab_size": 4,
+    "max_subargs_per_line": 3,
+    "separate_ctrl_name_with_space": true,
+    "separate_fn_name_with_space": false,
+    "dangle_parens": false,
+    "max_prefix_chars": 2,
+    "max_lines_hwrap": 2,
+    "line_ending": "unix",
+    "command_case": "canonical",
+    "keyword_case": "unchanged",
+    "enable_sort": true,
+    "input_encoding": "utf-8",
+    "output_encoding": "utf-8"
+}
