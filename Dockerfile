@@ -15,7 +15,7 @@ RUN apt-get update -qq && \
     rm -rf /var/cache/apt/archives/* && \
     rm -rf /var/lib/apt/lists/*
 
-ENV LD_LIBRARY_PATH /usr/local/lib:/usr:/usr/lib/aarch64-linux-gnu
+ENV LD_LIBRARY_PATH /usr/local/lib:/usr:/usr/lib/aarch64-linux-gnu:/usr/lib/x86_64-linux-gnu
 
 WORKDIR /opt
 
