@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  client:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./share:/opt/kafka/share
+    environment:
+      BENCHMARK: "KFR5 KFR6 FFTW3 IPP MKL"

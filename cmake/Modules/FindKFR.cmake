@@ -4,6 +4,6 @@ include(FindPackageStandard)
 # Load using standard package finder
 find_package_standard(
   NAMES kfr_io kfr_capi kfr_dft
-  HEADERS "kfr/all.hpp"
-  PATHS $ENV{KFR}
+  HEADERS "kfr/kfr.h"
+  PATHS ${KFR} $ENV{KFR}
 )

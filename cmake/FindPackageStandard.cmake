@@ -29,86 +29,169 @@ function(find_package_standard)
         list(APPEND CMAKE_SYSTEM_INCLUDE_PATH /usr/include /usr/local/include)
     endif()
 
-    # Look for include directory
-    if(NOT LIBRARY_PATH_SUFFIXES)
-        set(LIBRARY_PATH_SUFFIXES include)
-    endif()
-
-    # Merge LD_LIBRARY_PATH and DYLD_LIBRARY_PATH
-    set(LIBRARY_PATHS "$ENV{LD_LIBRARY_PATH}:$ENV{DYLD_LIBRARY_PATH}:${LIBRARY_PATHS}")
-    string(REPLACE ":" ";" LIBRARY_PATHS ${LIBRARY_PATHS})
-
-    # Share additional file locations
+    # Prepare include and library file location variables
     set(_INCLUDE_PATHS)
     set(_LIBRARY_PATHS)
     foreach(LIBRARY_PATH ${LIBRARY_PATHS})
-        list(APPEND _LIBRARY_PATHS "${LIBRARY_PATH}")
-        list(APPEND _INCLUDE_PATHS "${LIBRARY_PATH}/../include")
+        list(APPEND _LIBRARY_PATHS "${LIBRARY_PATH}/lib")
+        list(APPEND _INCLUDE_PATHS "${LIBRARY_PATH}/include")
     endforeach()
 
+    # Merge with LD_LIBRARY_PATH and DYLD_LIBRARY_PATH (lower priority)
+    if (DEFINED ENV{LD_LIBRARY_PATH})
+        string(REPLACE ":" ";" LD_LIBRARY_PATH_LIST $ENV{LD_LIBRARY_PATH})
+        list(APPEND _LIBRARY_PATHS ${LD_LIBRARY_PATH_LIST})
+    endif()
+
+    if (DEFINED ENV{DYLD_LIBRARY_PATH})
+        string(REPLACE ":" ";" DYLD_LIBRARY_PATH_LIST $ENV{DYLD_LIBRARY_PATH})
+        list(APPEND _LIBRARY_PATHS ${DYLD_LIBRARY_PATH_LIST})
+    endif()
+
+    list(REMOVE_DUPLICATES _LIBRARY_PATHS)
+    list(REMOVE_DUPLICATES _INCLUDE_PATHS)
+
+    # Looking for library headers
     if(LIBRARY_HEADERS)
 
-        find_path(${LIBRARY}_INCLUDE_DIRS
-                NAMES ${LIBRARY_HEADERS}
-                PATHS ${CMAKE_SYSTEM_INCLUDE_PATH} ${_INCLUDE_PATHS}
-                PATH_SUFFIXES ${LIBRARY_PATH_SUFFIXES}
-                HINTS ${LIBRARY_HINTS})
+        find_path(${LIBRARY}_INCLUDE_DIR
+            NAMES 
+                ${LIBRARY_HEADERS}
+            PATHS 
+                ${${LIBRARY}_INCLUDE_DIR} ${CMAKE_SYSTEM_INCLUDE_PATH} ${_INCLUDE_PATHS}
+            PATH_SUFFIXES 
+                include
+            HINTS 
+                ${LIBRARY_HINTS}
+        )
 
+    endif()
+
+    # Looking for library version
+    set(${LIBRARY}_VERSION "0.0.0")
+    foreach(LIBRARY_HEADER ${LIBRARY_HEADERS})
+
+        set(LIBRARY_HEADER "${${LIBRARY}_INCLUDE_DIR}/${LIBRARY_HEADER}")
+        if("${${LIBRARY}_VERSION}" STREQUAL "0.0.0" AND EXISTS ${LIBRARY_HEADER})
+
+            file(READ "${LIBRARY_HEADER}" LIBRARY_HEADER_CONTENTS)
+
+            string(REGEX MATCH "#define [^ ]*VERSION_MAJOR ([0-9]+)" VERSION_MAJOR_MATCH "${LIBRARY_HEADER_CONTENTS}")
+            if(VERSION_MAJOR_MATCH)
+                set(${LIBRARY}_VERSION_MAJOR ${CMAKE_MATCH_1})
+            else()
+                set(${LIBRARY}_VERSION_MAJOR 0)
+            endif()
+
+            string(REGEX MATCH "#define [^ ]*VERSION_MINOR ([0-9]+)" VERSION_MINOR_MATCH "${LIBRARY_HEADER_CONTENTS}")
+            if(VERSION_MINOR_MATCH)
+                set(${LIBRARY}_VERSION_MINOR ${CMAKE_MATCH_1})
+            else()
+                set(${LIBRARY}_VERSION_MINOR 0)
+            endif()
+            
+            string(REGEX MATCH "#define [^ ]*VERSION_PATCH ([0-9]+)" VERSION_PATCH_MATCH "${LIBRARY_HEADER_CONTENTS}")
+            if(VERSION_PATCH_MATCH)
+                set(${LIBRARY}_VERSION_PATCH ${CMAKE_MATCH_1})
+            else()
+                set(${LIBRARY}_VERSION_PATCH 0)
+            endif()
+
+            string(REGEX MATCH "#define [^ ]*VERSION_TWEAK ([0-9]+)" VERSION_TWEAK_MATCH "${LIBRARY_HEADER_CONTENTS}")
+            if(VERSION_TWEAK_MATCH)
+                set(${LIBRARY}_VERSION_TWEAK ${CMAKE_MATCH_1})
+            else()
+                set(${LIBRARY}_VERSION_TWEAK 0)
+            endif()
+
+            string(REGEX MATCH "#define [^ ]*VERSION_COUNT([0-9]+)" VERSION_COUNT_MATCH "${LIBRARY_HEADER_CONTENTS}")
+            if(VERSION_COUNT_MATCH)
+                set(${LIBRARY}_VERSION_COUNT ${CMAKE_MATCH_1})
+            else()
+                set(${LIBRARY}_VERSION_COUNT 0)
+            endif()
+            if(${LIBRARY}_VERSION_COUNT GREATER 4)
+                set(${LIBRARY}_VERSION_COUNT 4)
+            endif()
+
+            string(REGEX MATCH "#define [^ ]*VERSION ([0-9]+)" VERSION_MATCH "${LIBRARY_HEADER_CONTENTS}")
+            if(VERSION_MATCH)
+                set(${LIBRARY}_VERSION ${CMAKE_MATCH_1})
+            else()
+                set(${LIBRARY}_VERSION "${${LIBRARY}_VERSION_MAJOR}.${${LIBRARY}_VERSION_MINOR}.${${LIBRARY}_VERSION_PATCH}")
+            endif()
+
+        endif()
+
+    endforeach()
+
+    if("${${LIBRARY}_VERSION}" STREQUAL "0.0.0")
+        set(${LIBRARY}_VERSION "")
     endif()
 
     # Look for libraries
     if(NOT LIBRARY_HEADER_FILE_ONLY)
 
-        if(NOT LIBRARY_NAMES)
-            message(FATAL_ERROR "Missing library name looking for package `${LIBRARY}`")
-        endif()
-
-        foreach(LIBRARY_NAME IN LISTS LIBRARY_NAMES)
-
-            string(REGEX REPLACE "^lib" "" STRIPLIB "${LIBRARY_NAME}")
-        
-            string(TOLOWER ${STRIPLIB} LOWER_STRIPLIB)
-            string(TOUPPER ${STRIPLIB} UPPER_STRIPLIB)
+        if(NOT DEFINED ${LIBRARY}_LIBRARIES)
             
-            string(TOLOWER ${LIBRARY_NAME} LOWER_LIBRARY)
-            string(TOUPPER ${LIBRARY_NAME} UPPER_LIBRARY)
+            if(NOT LIBRARY_NAMES)
+                message(FATAL_ERROR "Missing library name looking for package `${LIBRARY}`")
+            endif()
 
+            foreach(LIBRARY_NAME IN LISTS LIBRARY_NAMES)
 
-            if(TARGET ${${LIBRARY_NAME}_LIBRARY})
+                string(REGEX REPLACE "^lib" "" STRIPLIB "${LIBRARY_NAME}")
+            
+                string(TOLOWER ${STRIPLIB} LOWER_STRIPLIB)
+                string(TOUPPER ${STRIPLIB} UPPER_STRIPLIB)
+                
+                string(TOLOWER ${LIBRARY_NAME} LOWER_LIBRARY)
+                string(TOUPPER ${LIBRARY_NAME} UPPER_LIBRARY)
 
-                set(${LIBRARY_NAME}_LIBRARY ${CMAKE_BINARY_DIR}/lib/lib${LIBRARY_NAME}.so)
-                if(APPLE)
-                    set(${LIBRARY_NAME}_LIBRARY ${CMAKE_BINARY_DIR}/lib/lib${LIBRARY_NAME}.dylib)
+                if(TARGET ${${LIBRARY_NAME}_LIBRARY})
+
+                    set(${LIBRARY_NAME}_LIBRARY ${CMAKE_BINARY_DIR}/lib/lib${LIBRARY_NAME}.so)
+                    if(APPLE)
+                        set(${LIBRARY_NAME}_LIBRARY ${CMAKE_BINARY_DIR}/lib/lib${LIBRARY_NAME}.dylib)
+                    endif()
+
+                else()
+
+                    find_library(
+                        ${LIBRARY_NAME}_LIBRARY
+                        NAMES ${LIBRARY_NAME} ${LOWER_LIBRARY}  ${UPPER_LIBRARY} 
+                            ${STRIPLIB}     ${LOWER_STRIPLIB} ${UPPER_STRIPLIB}
+                        PATHS ${_LIBRARY_PATHS}
+                        PATH_SUFFIXES lib lib64
+                    )
+                    
                 endif()
+
+                if(${LIBRARY_NAME}_LIBRARY)
+                    list(APPEND ${LIBRARY}_LIBRARIES ${${LIBRARY_NAME}_LIBRARY})
+                    unset(${LIBRARY_NAME}_LIBRARY CACHE)
+                endif()
+
+
+            endforeach()
+
+            if(TARGET ${LIBRARY})
+
+                set(${LIBRARY}_FOUND TRUE)
+                set(${LIBRARY}_INCLUDE_DIRS ${CMAKE_BINARY_DIR}/include)
 
             else()
 
-                find_library(
-                    ${LIBRARY_NAME}_LIBRARY 
-                    NAMES ${LIBRARY_NAME} ${LOWER_LIBRARY} ${UPPER_LIBRARY} 
-                        ${STRIPLIB} ${LOWER_STRIPLIB} ${UPPER_STRIPLIB}
-                    PATHS ${_LIBRARY_PATHS}
-                    PATH_SUFFIXES lib lib64
+                # Provide information about how to use the library
+                include(FindPackageHandleStandardArgs)
+                find_package_handle_standard_args(${LIBRARY} 
+                    FOUND_VAR ${LIBRARY}_FOUND
+                    REQUIRED_VARS ${LIBRARY}_LIBRARIES ${LIBRARY}_INCLUDE_DIR
+                    VERSION_VAR "${LIBRARY}_VERSION"
+                    HANDLE_VERSION_RANGE
                 )
-
+                
             endif()
-
-            if(${LIBRARY_NAME}_LIBRARY)
-                list(APPEND ${LIBRARY}_LIBRARIES ${${LIBRARY_NAME}_LIBRARY})
-            endif()
-
-        endforeach()
-
-        if(TARGET ${LIBRARY})
-
-            set(${LIBRARY}_FOUND TRUE)
-            set(${LIBRARY}_INCLUDE_DIRS ${CMAKE_BINARY_DIR}/include)
-
-        else()
-
-            # Provide information about how to use the library
-            include(FindPackageHandleStandardArgs)
-            find_package_handle_standard_args(${LIBRARY} DEFAULT_MSG ${LIBRARY}_LIBRARIES ${LIBRARY}_INCLUDE_DIRS)
 
         endif()
 
@@ -121,7 +204,26 @@ function(find_package_standard)
     # Pass the variables back to the parent scope
     set(${LIBRARY}_FOUND ${${LIBRARY}_FOUND} PARENT_SCOPE)
     set(${LIBRARY}_LIBRARIES ${${LIBRARY}_LIBRARIES} PARENT_SCOPE)
-    set(${LIBRARY}_INCLUDE_DIRS ${${LIBRARY}_INCLUDE_DIRS} PARENT_SCOPE)
+    set(${LIBRARY}_INCLUDE_DIRS ${${LIBRARY}_INCLUDE_DIR} PARENT_SCOPE)
+    set(${LIBRARY}_VERSION ${${LIBRARY}_VERSION} PARENT_SCOPE)
+    set(${LIBRARY}_VERSION_MAJOR ${${LIBRARY}_VERSION_MAJOR} PARENT_SCOPE)
+    set(${LIBRARY}_VERSION_MINOR ${${LIBRARY}_VERSION_MINOR} PARENT_SCOPE)
+    set(${LIBRARY}_VERSION_PATCH ${${LIBRARY}_VERSION_PATCH} PARENT_SCOPE)
+    set(${LIBRARY}_VERSION_TWEAK ${${LIBRARY}_VERSION_TWEAK} PARENT_SCOPE)
+    set(${LIBRARY}_VERSION_COUNT ${${LIBRARY}_VERSION_COUNT} PARENT_SCOPE)
+    
+    # Remove cache variables
+    if(DEFINED ${LIBRARY}_LIBRARIES)
+        unset(${LIBRARY}_LIBRARIES CACHE)
+    endif()
+
+    if(DEFINED ${LIBRARY}_INCLUDE_DIRS)
+        unset(${LIBRARY}_INCLUDE_DIRS CACHE)
+    endif()
+
+    if(DEFINED ${LIBRARY}_INCLUDE_DIR)
+        unset(${LIBRARY}_INCLUDE_DIR CACHE)
+    endif()
 
 endfunction()
 
