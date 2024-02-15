@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.12)
 
+list(PREPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_EXTENSIONS ON)
 
@@ -23,8 +25,9 @@ function (add_fft NAME)
     cmake_parse_arguments(LIB "" "" "SOURCES;LIBRARIES;INCLUDES" ${ARGN})
 
     add_executable(fft_benchmark_${NAME} ${COMMON_SRCS} ${LIB_SOURCES})
-    target_link_libraries(fft_benchmark_${NAME} PRIVATE ${LIB_LIBRARIES})
-    target_include_directories(fft_benchmark_${NAME} PRIVATE ${COMMON_INCLUDES} ${LIB_INCLUDES})
+    target_link_libraries(fft_benchmark_${NAME} PUBLIC ${LIB_LIBRARIES})
+    target_include_directories(fft_benchmark_${NAME} PUBLIC ${COMMON_INCLUDES} ${LIB_INCLUDES})
+    
 endfunction ()
 
 add_subdirectory(fftlibs)
