@@ -184,13 +184,19 @@ function(find_package_standard)
 
                 # Provide information about how to use the library
                 include(FindPackageHandleStandardArgs)
-                find_package_handle_standard_args(${LIBRARY} 
-                    FOUND_VAR ${LIBRARY}_FOUND
-                    REQUIRED_VARS ${LIBRARY}_LIBRARIES ${LIBRARY}_INCLUDE_DIR
-                    VERSION_VAR "${LIBRARY}_VERSION"
-                    HANDLE_VERSION_RANGE
-                )
-                
+                if(NOT ${LIBRARY}_VERSION) 
+                    find_package_handle_standard_args(${LIBRARY} 
+                        FOUND_VAR ${LIBRARY}_FOUND
+                        REQUIRED_VARS ${LIBRARY}_LIBRARIES ${LIBRARY}_INCLUDE_DIR
+                    )
+                else()
+                    find_package_handle_standard_args(${LIBRARY} 
+                        FOUND_VAR ${LIBRARY}_FOUND
+                        REQUIRED_VARS ${LIBRARY}_LIBRARIES ${LIBRARY}_INCLUDE_DIR
+                        VERSION_VAR "${LIBRARY}_VERSION"
+                        HANDLE_VERSION_RANGE
+                    )
+                endif()                
             endif()
 
         endif()
