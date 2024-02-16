@@ -4,6 +4,7 @@ function(find_package_standard)
     set(options "HEADER_FILE_ONLY")
     set(oneValueArgs "")
     set(multiValueArgs NAMES HEADERS HINTS PATHS PATH_SUFFIXES)
+
     cmake_parse_arguments(LIBRARY "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
     # Extract package name from basename
@@ -54,7 +55,7 @@ function(find_package_standard)
     # Looking for library headers
     if(LIBRARY_HEADERS)
 
-        find_path(${LIBRARY}_INCLUDE_DIR
+        find_path(${LIBRARY}_INCLUDE_DIRS
             NAMES 
                 ${LIBRARY_HEADERS}
             PATHS 
@@ -71,7 +72,7 @@ function(find_package_standard)
     set(${LIBRARY}_VERSION "0.0.0")
     foreach(LIBRARY_HEADER ${LIBRARY_HEADERS})
 
-        set(LIBRARY_HEADER "${${LIBRARY}_INCLUDE_DIR}/${LIBRARY_HEADER}")
+        set(LIBRARY_HEADER "${${LIBRARY}_INCLUDE_DIRS}/${LIBRARY_HEADER}")
         if("${${LIBRARY}_VERSION}" STREQUAL "0.0.0" AND EXISTS ${LIBRARY_HEADER})
 
             file(READ "${LIBRARY_HEADER}" LIBRARY_HEADER_CONTENTS)
@@ -187,12 +188,12 @@ function(find_package_standard)
                 if(NOT ${LIBRARY}_VERSION) 
                     find_package_handle_standard_args(${LIBRARY} 
                         FOUND_VAR ${LIBRARY}_FOUND
-                        REQUIRED_VARS ${LIBRARY}_LIBRARIES ${LIBRARY}_INCLUDE_DIR
+                        REQUIRED_VARS ${LIBRARY}_LIBRARIES ${LIBRARY}_INCLUDE_DIRS
                     )
                 else()
                     find_package_handle_standard_args(${LIBRARY} 
                         FOUND_VAR ${LIBRARY}_FOUND
-                        REQUIRED_VARS ${LIBRARY}_LIBRARIES ${LIBRARY}_INCLUDE_DIR
+                        REQUIRED_VARS ${LIBRARY}_LIBRARIES ${LIBRARY}_INCLUDE_DIRS
                         VERSION_VAR "${LIBRARY}_VERSION"
                         HANDLE_VERSION_RANGE
                     )
@@ -210,7 +211,7 @@ function(find_package_standard)
     # Pass the variables back to the parent scope
     set(${LIBRARY}_FOUND ${${LIBRARY}_FOUND} PARENT_SCOPE)
     set(${LIBRARY}_LIBRARIES ${${LIBRARY}_LIBRARIES} PARENT_SCOPE)
-    set(${LIBRARY}_INCLUDE_DIRS ${${LIBRARY}_INCLUDE_DIR} PARENT_SCOPE)
+    set(${LIBRARY}_INCLUDE_DIRS ${${LIBRARY}_INCLUDE_DIRS} PARENT_SCOPE)
     set(${LIBRARY}_VERSION ${${LIBRARY}_VERSION} PARENT_SCOPE)
     set(${LIBRARY}_VERSION_MAJOR ${${LIBRARY}_VERSION_MAJOR} PARENT_SCOPE)
     set(${LIBRARY}_VERSION_MINOR ${${LIBRARY}_VERSION_MINOR} PARENT_SCOPE)
