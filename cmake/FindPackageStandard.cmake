@@ -30,14 +30,25 @@ function(find_package_standard)
         list(APPEND CMAKE_SYSTEM_INCLUDE_PATH /usr/include /usr/local/include)
     endif()
 
-    # Prepare include and library file location variables
+    # Prepare include and library file location variables    
     set(_INCLUDE_PATHS)
     set(_LIBRARY_PATHS)
+
+    if(DEFINED ${LIBRARY}_DIR) # Priority to input cmake variables
+        set(_INCLUDE_PATHS "${${LIBRARY}_DIR}/include")
+        set(_LIBRARY_PATHS "${${LIBRARY}_DIR}/lib")
+    endif()
+
     foreach(LIBRARY_PATH ${LIBRARY_PATHS})
         list(APPEND _LIBRARY_PATHS "${LIBRARY_PATH}/lib")
         list(APPEND _INCLUDE_PATHS "${LIBRARY_PATH}/include")
     endforeach()
 
+    if(DEFINED ENV{${LIBRARY}_DIR}) # Less priority for environment variables
+        set(_INCLUDE_PATHS "${ENV{${LIBRARY}_DIR}}/include")
+        set(_LIBRARY_PATHS "${ENV{${LIBRARY}_DIR}}/lib")
+    endif()
+    
     # Merge with LD_LIBRARY_PATH and DYLD_LIBRARY_PATH (lower priority)
     if (DEFINED ENV{LD_LIBRARY_PATH})
         string(REPLACE ":" ";" LD_LIBRARY_PATH_LIST $ENV{LD_LIBRARY_PATH})
