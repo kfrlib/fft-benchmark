@@ -16,6 +16,15 @@ add_compile_definitions(CMAKE_CXX_COMPILER_VERSION="${CMAKE_CXX_COMPILER_VERSION
 
 # Project information & includes
 project(fft_benchmark)
+add_compile_options(-Wextra -Wno-sign-compare -Wimplicit-fallthrough)
+
+if(APPLE) 
+    set(CMAKE_BUILD_WITH_INSTALL_NAME_DIR ON)
+    set(CMAKE_INSTALL_NAME_DIR "@rpath")
+    set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
+    set(CMAKE_INSTALL_RPATH "@loader_path")
+endif()
+
 include(DisableInSourceBuild)
 include(FindPackageStandard)
 
