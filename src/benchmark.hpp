@@ -174,7 +174,7 @@ inline uint64_t rdtsc()
     std::atomic_thread_fence(std::memory_order_seq_cst);
 #endif
 #ifdef __clang__
-#ifdef __arm64__
+#ifdef __aarch64__
     uint64_t tsc;
     asm volatile("mrs %0, CNTVCT_EL0" : "=r"(tsc):);
 #else
