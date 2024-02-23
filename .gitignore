@@ -13,3 +13,4 @@ include
 .cache
 img
 .vscode
+.DS_Store

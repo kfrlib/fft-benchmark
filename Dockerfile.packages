@@ -1,0 +1,12 @@
+bash
+git
+wget
+make
+supervisor
+lsb-release
+gnupg2
+ca-certificates
+nano
+procps
+cmake
+clang
