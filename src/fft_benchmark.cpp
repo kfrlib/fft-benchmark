@@ -101,7 +101,7 @@ struct benchmark_runner
             if (inplace)
                 std::copy(in, in + size * 2, out);
 
-            if ((total_duration >= std::chrono::milliseconds(benchmark_duration) && total_calls >= 100) ||
+            if ((total_duration >= std::chrono::milliseconds(benchmark_duration) && total_calls >= 50) ||
                 total_calls >= 1000'000)
                 break;
         }
@@ -110,8 +110,8 @@ struct benchmark_runner
             std::chrono::duration<double>(total_duration).count() / total_calls;
         [[maybe_unused]] double minimum_time =
             std::chrono::duration<double>(minimum_duration).count() / calls_per_run;
-        [[maybe_unused]] double opspersecond_avg  = calls_per_run / average_time;
-        [[maybe_unused]] double opspersecond_best = calls_per_run / minimum_time;
+        [[maybe_unused]] double opspersecond_avg  = 1.0 / average_time;
+        [[maybe_unused]] double opspersecond_best = 1.0 / minimum_time;
 
         double time_value = minimum_time;
         const double mflops =
