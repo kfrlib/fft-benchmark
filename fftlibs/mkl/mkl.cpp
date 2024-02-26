@@ -7,7 +7,10 @@
 std::string fft_name()
 {
 #if defined(__x86_64__) || defined(_M_X64)
-    MKL_Enable_Instructions(MKL_ENABLE_AVX2);
+    if (avx2only) {
+        fprintf(stderr, "MKL: enabling AVX2\n");
+        MKL_Enable_Instructions(MKL_ENABLE_AVX2);
+    }
 #endif
     char buf[1024];
     MKL_Get_Version_String(buf, sizeof(buf));

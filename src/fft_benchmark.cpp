@@ -154,6 +154,7 @@ std::string execfile(std::string command)
 static std::string outname;
 static bool progress = true;
 static bool banner   = true;
+bool avx2only = false;
 static std::vector<std::vector<size_t>> sizes;
 static std::vector<bool> is_complex_list{ true, false };
 static std::vector<bool> inverse_list{ false, true };
@@ -282,6 +283,10 @@ int main(int argc, char** argv)
         {
             banner = true;
         }
+        else if (argv[i] == "--avx2-only"sv)
+        {
+            avx2only = true;
+        }
         else if (argv[i] == "--"sv)
         {
         }
@@ -304,7 +309,8 @@ int main(int argc, char** argv)
     {
         printf("FFT/DFT benchmarking tool. Copyright (C) 2016-2024 Dan Cazarin https://www.kfrlib.com\n");
         printf("Benchmark source code is MIT-licensed\n");
-        printf("DFT/FFT libraries have their own licenses. Please refer to the respective source code for details.\n");
+        printf("DFT/FFT libraries have their own licenses. Please refer to the respective source code for "
+               "details.\n");
 
         if (sizes.empty())
         {

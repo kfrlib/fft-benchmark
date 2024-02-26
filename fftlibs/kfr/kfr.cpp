@@ -18,7 +18,11 @@ const char* library_version_dft();
 std::string fft_name()
 {
 #if defined(__x86_64__) || defined(_M_X64)
-    kfr::override_cpu(kfr::cpu_t::avx2);
+    if (avx2only)
+    {
+        fprintf(stderr, "KFR: enabling AVX2\n");
+        kfr::override_cpu(kfr::cpu_t::avx2);
+    }
 #endif
     return std::string(kfr::library_version_dft());
 }

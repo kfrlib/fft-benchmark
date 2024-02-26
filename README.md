@@ -24,6 +24,22 @@ Requires:
   * matplotlib module
   * numpy module
 
+## Options
+
+| Option             | Description                                                     |
+|--------------------|-----------------------------------------------------------------|
+| `SIZE`             | 1D FFT                                                          |
+| `SIZExSIZE`        | 2D FFT. Example: `64x32`                                        |
+| `SIZExSIZExSIZE`   | 3D FFT. Example: `64x32x16`                                     |
+| `--complex flags`  | `y` (complex tests), `yn` (all tests), `n` (real tests)         |
+| `--inverse flags`  | `y` (IDFT tests), `ny` (DFT/IDFT tests), `n` (DFT tests)        |
+| `--inplace flags`  | `y` (inplace tests), `ny` (all tests), `n` (out-of-place tests) |
+| `--save data.json` | Save results in JSON                                            |
+| `--save -`         | Print resulting JSON to stdout                                  |
+| `--avx2-only`      | Enable only AVX2 (supported in KFR, IPP, MKL)                   |
+| `--no-progress`    | Disable verbose progress output                                 |
+| `--no-banner`      | Disable banner                                                  |
+
 ## Benchmark code license
 
 MIT

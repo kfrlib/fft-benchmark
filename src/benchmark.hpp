@@ -422,3 +422,5 @@ extern template fft_impl_ptr<double> fft_create<double>(const std::vector<size_t
                                                         bool inverse, bool inplace);
 
 std::string fft_name();
+
+extern bool avx2only;
