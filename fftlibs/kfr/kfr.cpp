@@ -130,6 +130,12 @@ private:
 template <typename real>
 fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, bool is_complex, bool invert, bool inplace)
 {
+    if (!is_complex)
+    {
+        size_t s = std::accumulate(size.begin(), size.end(), size_t(1), std::multiplies<>{});
+        if (s & 1)
+            return nullptr;
+    }
     return fft_create_for<fft_implementation, real>(size, is_complex, invert, inplace);
 }
 

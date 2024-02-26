@@ -154,7 +154,7 @@ std::string execfile(std::string command)
 static std::string outname;
 static bool progress = true;
 static bool banner   = true;
-bool avx2only = false;
+bool avx2only        = false;
 static std::vector<std::vector<size_t>> sizes;
 static std::vector<bool> is_complex_list{ true, false };
 static std::vector<bool> inverse_list{ false, true };
