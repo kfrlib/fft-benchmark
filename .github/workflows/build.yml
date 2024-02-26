@@ -9,6 +9,16 @@ jobs:
     - name: Packages
       run: |
         sudo apt-get update && sudo apt-get install -y wget cmake gnupg2 ninja-build build-essential unzip
+    - name: Install IPP & MKL binaries
+      run: |
+        cd "${{ runner.temp }}"
+        wget https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
+        sudo apt-key add GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
+        rm GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
+        echo "deb https://apt.repos.intel.com/oneapi all main" | sudo tee /etc/apt/sources.list.d/oneAPI.list
+        sudo add-apt-repository "deb https://apt.repos.intel.com/oneapi all main"
+        sudo apt install intel-oneapi-ipp intel-oneapi-ipp-devel
+        sudo apt install intel-oneapi-mkl intel-oneapi-mkl-devel
     - name: Build FFTW
       run: |
         cd "$VCPKG_INSTALLATION_ROOT"
@@ -30,12 +40,12 @@ jobs:
       env:
         TMP_DIR: ${{ runner.temp }}
       run: |
-        cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=${TMP_DIR}/kfr/lib/cmake;$VCPKG_INSTALLATION_ROOT/installed/x64-linux/share"
+        cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=${TMP_DIR}/kfr/lib/cmake;$VCPKG_INSTALLATION_ROOT/installed/x64-linux/share;/opt/intel/oneapi/ipp/latest/lib/cmake;/opt/intel/oneapi/mkl/latest/lib/cmake"
         ninja -C build
         ls -la build
-        file build/fft_benchmark_{fftw,kfr}
+        file build/fft_benchmark_{fftw,kfr,ipp,mkl}
         mkdir -p "${{ github.workspace }}/dist"
-        cp build/fft_benchmark_{fftw,kfr} "${{ github.workspace }}/dist"
+        cp build/fft_benchmark_{fftw,kfr,ipp,mkl} "${{ github.workspace }}/dist"
     - name: Binaries
       uses: actions/upload-artifact@v4
       with:
