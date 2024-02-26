@@ -51,20 +51,20 @@ results      = [json.load(open(f)) for f in files]
 libraries    = [r['library'] for r in results]
 all_results  = [re for r in results for re in r['results']]
 
-mflops_f     = [x['mflops'] for x in all_results if x['data']=='float']
-mflops_d     = [x['mflops'] for x in all_results if x['data']=='double']
-mflops_f_max = max(mflops_f)
-mflops_d_max = max(mflops_d)
+mflops_f     = [x.get('mflops') for x in all_results if x['data']=='float']
+mflops_d     = [x.get('mflops') for x in all_results if x['data']=='double']
+mflops_f_max = max(x for x in mflops_f if x is not None)
+mflops_d_max = max(x for x in mflops_d if x is not None)
 mflops_f_max = math.ceil(mflops_f_max/10000.0)*10000.0
 mflops_d_max = math.ceil(mflops_d_max/10000.0)*10000.0
 
 for data in ['float', 'double']:
     topy = mflops_f_max if data=='float' else mflops_d_max
-    for type in ['complex']:
-        for direction in ['forward']:
+    for type in ['complex', 'real']:
+        for direction in ['forward', 'inverse']:
             for buffer in ['inplace', 'outofplace']:
                 title     = f'{data}-{type}-{direction}-{buffer}'
                 print("Generating plot: ", title)
                 sizes     = [x['size'] for x in results[0]['results'] if x['data']==data and x['type']==type and x['direction']==direction and x['buffer']==buffer]
-                values    = [ ([x['mflops'] for x in r['results'] if x['data']==data and x['type']==type and x['direction']==direction and x['buffer']==buffer]) for r in results ]                
+                values    = [ ([x.get('mflops') for x in r['results'] if x['data']==data and x['type']==type and x['direction']==direction and x['buffer']==buffer]) for r in results ]                
                 plot(values, sizes, libraries, title, topy, title+'.svg')
