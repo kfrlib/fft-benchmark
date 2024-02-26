@@ -21,7 +21,8 @@
 #include <array>
 #include <charconv>
 #include <memory>
-#include <stdlib.h>
+#include <cstdlib>
+#include <cstring>
 #include <string>
 #include <string_view>
 #include <vector>

@@ -1,5 +1,6 @@
 # build directory
-build*
+build
+build/
 bin/
 
 ipp/*

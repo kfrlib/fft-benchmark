@@ -337,6 +337,9 @@ int main(int argc, char** argv)
     json_key("cpu");
     json_string(cpuname);
 
+    json_key("clock_MHz");
+    json_number(1000.0 / tsc_resolution());
+
     json_key("library");
     json_string(fftname);
 

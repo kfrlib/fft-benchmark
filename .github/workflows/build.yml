@@ -1,0 +1,43 @@
+name: Build
+on: push
+jobs:
+  linux-x86_64:
+    runs-on: ubuntu-22.04
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4    
+    - name: Packages
+      run: |
+        sudo apt-get update && sudo apt-get install -y wget cmake gnupg2 ninja-build build-essential unzip
+    - name: Build FFTW
+      run: |
+        cd "$VCPKG_INSTALLATION_ROOT"
+        ./vcpkg install fftw3[avx2]
+        ls -la "$VCPKG_INSTALLATION_ROOT/installed"
+        ls -la "$VCPKG_INSTALLATION_ROOT/installed/x64-linux"
+        ls -la "$VCPKG_INSTALLATION_ROOT/installed/x64-linux/share"
+        ls -la "$VCPKG_INSTALLATION_ROOT/installed/x64-linux/lib"
+        ls -la "$VCPKG_INSTALLATION_ROOT/installed/x64-linux/include"
+    - name: Get KFR6 binaries
+      env:
+        TMP_DIR: ${{ runner.temp }}
+        KFR_VER: 6.0.2
+      run: |
+        curl -o "$TMP_DIR/kfr.zip" -L "https://github.com/kfrlib/kfr/releases/download/$KFR_VER/linux-x86_64.zip"
+        unzip "$TMP_DIR/kfr.zip" -d "${TMP_DIR}/kfr"
+        ls -la "${TMP_DIR}/kfr"
+    - name: Build benchmark
+      env:
+        TMP_DIR: ${{ runner.temp }}
+      run: |
+        cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=${TMP_DIR}/kfr/lib/cmake;$VCPKG_INSTALLATION_ROOT/installed/x64-linux/share"
+        ninja -C build
+        ls -la build
+        file build/fft_benchmark_{fftw,kfr}
+        mkdir -p "${{ github.workspace }}/dist"
+        cp build/fft_benchmark_{fftw,kfr} "${{ github.workspace }}/dist"
+    - name: Binaries
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux-x86_64
+        path: ${{ github.workspace }}/dist
