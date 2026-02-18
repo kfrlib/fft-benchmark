@@ -4,42 +4,53 @@ jobs:
   linux-x86_64:
     runs-on: ubuntu-24.04
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4    
-    - name: Packages
-      run: |
-        sudo apt-get update && sudo apt-get install -y wget cmake gnupg2 ninja-build build-essential unzip
-    - name: Install IPP & MKL binaries
-      run: |
-        wget -qO- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB | sudo gpg --dearmor -o /usr/share/keyrings/intel-oneapi-archive-keyring.gpg
-        echo "deb [signed-by=/usr/share/keyrings/intel-oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" | sudo tee /etc/apt/sources.list.d/oneAPI.list
-        sudo apt-get update
-        sudo apt-get install -y intel-oneapi-ipp intel-oneapi-ipp-devel
-        sudo apt-get install -y intel-oneapi-mkl intel-oneapi-mkl-devel
-    - name: Build Vcpkg dependencies
-      run: |
-        cd "$VCPKG_INSTALLATION_ROOT"
-        ./vcpkg install fftw3[avx2] sleef[dft] kissfft pffft juce --triplet x64-linux
-    - name: Get KFR7 binaries
-      env:
-        TMP_DIR: ${{ runner.temp }}
-        KFR_VER: 7.0.1
-      run: |
-        curl -o "$TMP_DIR/kfr.zip" -L "https://github.com/kfrlib/kfr/releases/download/$KFR_VER/linux-x86_64.zip"
-        unzip "$TMP_DIR/kfr.zip" -d "${TMP_DIR}/kfr"
-        ls -la "${TMP_DIR}/kfr"
-    - name: Build benchmark
-      env:
-        TMP_DIR: ${{ runner.temp }}
-      run: |
-        cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=${TMP_DIR}/kfr/lib/cmake;$VCPKG_INSTALLATION_ROOT/installed/x64-linux/share;/opt/intel/oneapi/ipp/latest/lib/cmake;/opt/intel/oneapi/mkl/latest/lib/cmake"
-        ninja -C build
-        ls -la build
-        file build/fft_benchmark_{fftw,kfr,ipp,mkl,sleef,kissfft,pffft,juce}
-        mkdir -p "${{ github.workspace }}/dist"
-        cp build/fft_benchmark_{fftw,kfr,ipp,mkl,sleef,kissfft,pffft,juce} "${{ github.workspace }}/dist"
-    - name: Binaries
-      uses: actions/upload-artifact@v4
-      with:
-        name: linux-x86_64
-        path: ${{ github.workspace }}/dist
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Packages
+        run: |
+          sudo apt-get update && sudo apt-get install -y wget cmake gnupg2 ninja-build build-essential unzip libx11-dev libxcomposite-dev libxext-dev libasound2-dev
+      - name: Build Vcpkg dependencies
+        env:
+          VCPKG_TARGET_TRIPLET: x64-linux
+          VCPKG_HOST_TRIPLET: x64-linux
+        run: |
+          cd "$VCPKG_INSTALLATION_ROOT"
+          ./vcpkg install fftw3[avx2] sleef[dft] kissfft pffft juce[core]
+      - name: Get KFR7 binaries
+        env:
+          TMP_DIR: ${{ runner.temp }}
+          KFR_VER: 7.0.1
+        run: |
+          curl -o "$TMP_DIR/kfr.zip" -L "https://github.com/kfrlib/kfr/releases/download/$KFR_VER/linux-x86_64.zip"
+          unzip "$TMP_DIR/kfr.zip" -d "${TMP_DIR}/kfr"
+          ls -la "${TMP_DIR}/kfr"
+      - name: Install IPP & MKL binaries
+        run: |
+          wget -qO- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB | sudo gpg --dearmor -o /usr/share/keyrings/intel-oneapi-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/intel-oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" | sudo tee /etc/apt/sources.list.d/oneAPI.list
+          sudo apt-get update
+          sudo apt-get install -y intel-oneapi-ipp intel-oneapi-ipp-devel
+          sudo apt-get install -y intel-oneapi-mkl intel-oneapi-mkl-devel
+      - name: Build benchmark
+        env:
+          TMP_DIR: ${{ runner.temp }}
+        run: |
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=${TMP_DIR}/kfr/lib/cmake;$VCPKG_INSTALLATION_ROOT/installed/x64-linux/share;/opt/intel/oneapi/ipp/latest/lib/cmake;/opt/intel/oneapi/mkl/latest/lib/cmake"
+          ninja -C build
+          ls -la build
+          file build/fft_benchmark_{fftw,kfr,ipp,mkl,sleef,kissfft,pffft,juce}
+          mkdir -p "${{ github.workspace }}/dist"
+          cp build/fft_benchmark_{fftw,kfr,ipp,mkl,sleef,kissfft,pffft,juce} "${{ github.workspace }}/dist"
+      - name: Binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-x86_64
+          path: ${{ github.workspace }}/dist
+      - name: Upload buildtrees
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vcpkg-buildtrees
+          retention-days: 10
+          path: |
+            /usr/local/share/vcpkg/buildtrees
