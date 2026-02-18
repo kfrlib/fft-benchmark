@@ -7,7 +7,8 @@
 std::string fft_name()
 {
 #if defined(__x86_64__) || defined(_M_X64)
-    if (avx2only) {
+    if (avx2only)
+    {
         fprintf(stderr, "MKL: enabling AVX2\n");
         MKL_Enable_Instructions(MKL_ENABLE_AVX2);
     }
@@ -68,14 +69,11 @@ public:
         HANDLE_MKL_STATUS(DftiSetValue(handle_o, DFTI_PACKED_FORMAT, DFTI_CCE_FORMAT));
         HANDLE_MKL_STATUS(DftiCommitDescriptor(handle_o));
 
-        if (is_complex)
-        {
-            HANDLE_MKL_STATUS(create(handle_i, size));
-            HANDLE_MKL_STATUS(DftiSetValue(handle_i, DFTI_PLACEMENT, DFTI_INPLACE));
-            HANDLE_MKL_STATUS(DftiSetValue(handle_i, DFTI_CONJUGATE_EVEN_STORAGE, DFTI_COMPLEX_COMPLEX));
-            HANDLE_MKL_STATUS(DftiSetValue(handle_i, DFTI_PACKED_FORMAT, DFTI_CCE_FORMAT));
-            HANDLE_MKL_STATUS(DftiCommitDescriptor(handle_i));
-        }
+        HANDLE_MKL_STATUS(create(handle_i, size));
+        HANDLE_MKL_STATUS(DftiSetValue(handle_i, DFTI_PLACEMENT, DFTI_INPLACE));
+        HANDLE_MKL_STATUS(DftiSetValue(handle_i, DFTI_CONJUGATE_EVEN_STORAGE, DFTI_COMPLEX_COMPLEX));
+        HANDLE_MKL_STATUS(DftiSetValue(handle_i, DFTI_PACKED_FORMAT, DFTI_CCE_FORMAT));
+        HANDLE_MKL_STATUS(DftiCommitDescriptor(handle_i));
     }
     void execute(real* out, const real* in) final
     {
@@ -105,7 +103,7 @@ public:
 
     ~fft_implementation()
     {
-        // HANDLE_MKL_STATUS(DftiFreeDescriptor(&handle_i));
+        HANDLE_MKL_STATUS(DftiFreeDescriptor(&handle_i));
         HANDLE_MKL_STATUS(DftiFreeDescriptor(&handle_o));
     }
 

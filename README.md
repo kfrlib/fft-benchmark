@@ -1,28 +1,68 @@
 # FFT benchmark
+
 A benchmark for comparison of FFT algorithms performance.
+Supports 1D, 2D, and 3D transforms with float and double precision.
+Measures the performance of real/complex, in-place/out-of-place, forward/inverse FFT.
 
-Currently supports 
-* [KFR](https://github.com/kfrlib/kfr)
-* Intel IPP
-* Intel MKL
-* FFTW
+## Supported libraries
 
-`CMAKE_PREFIX_PATH` should contain the paths to cmake configs of used libraries.
+| Library | Float | Double | 1D | 2D | 3D | Notes |
+|---------|:-----:|:------:|:--:|:--:|:---:|-------|
+| [KFR](https://github.com/kfrlib/kfr) | ✅ | ✅ | ✅ | ✅ | ✅ | Real transforms require even sizes |
+| [Intel IPP](https://www.intel.com/content/www/us/en/developer/tools/oneapi/ipp.html) | ✅ | ✅ | ✅ | ❌ | ❌ | |
+| [Intel MKL](https://www.intel.com/content/www/us/en/developer/tools/oneapi/onemkl.html) | ✅ | ✅ | ✅ | ✅ | ✅ | |
+| [FFTW](http://www.fftw.org/) | ✅ | ✅ | ✅ | ✅ | ✅ | |
+| [Sleef](https://sleef.org/) | ✅ | ✅ | ✅ | ❌ | ❌ | |
+| [PFFFT](https://bitbucket.org/jpommier/pffft/) | ✅ | ❌ | ✅ | ❌ | ❌ | Float-only |
+| [JUCE](https://juce.com/) | ✅ | ❌ | ✅ | ❌ | ❌ | Float-only, power-of-2 sizes only |
+| [KissFFT](https://github.com/mborgerding/kissfft) | ✅ | ✅ | ✅ | ❌ | ❌ | No real inverse; out-of-place only |
+
+**Note:** Multithreading is disabled for fair comparison, as only a few libraries support it.
+
+All libraries are **optional** — if not found via CMake's `find_package`, they are simply disabled.
+
+## Building
+
+### Requirements
+
+* C++17 compiler (Clang 12.0+ recommended)
+* CMake 3.12 or newer
+* Python 3.5 or newer (for plotting)
+  * matplotlib
+  * numpy
+
+### Setup
+
+`CMAKE_PREFIX_PATH` should contain the paths to CMake configs of the libraries you want to benchmark.
+
 Example:
 ```
 C:/vcpkg/installed/x64-windows-static-md/share
 C:/Program Files (x86)/Intel/oneAPI/ipp/2021.9.0/lib/cmake/ipp
-C:/Program Files (x86)/Intel/oneAPI/mkl/2024.0/lib/cmake/mkl
+C:/Program Files (x86)/Intel/oneAPI/mkl/2026.0/lib/cmake/mkl
 kfr-install-dir/lib/cmake
 ```
 
-Requires:
-* Clang 12.0+
-* CMake 3.12 or newer
-* AVX2-capable cpu
-* Python 3.5 or newer
-  * matplotlib module
-  * numpy module
+### Build
+
+```bash
+cmake -B build -DCMAKE_PREFIX_PATH="path1;path2;..."
+cmake --build build
+```
+
+A separate executable is produced for each library found (e.g. `fft_benchmark_kfr`, `fft_benchmark_ipp`, etc.).
+
+## Usage
+
+```
+fft_benchmark_<library> [options] <size> [<size> ...]
+```
+
+Example:
+```bash
+fft_benchmark_kfr --save results.json 262144 512x512 64x64x64
+fft_benchmark_kfr --save - 262144   # print JSON to stdout
+```
 
 ## Options
 
@@ -40,6 +80,51 @@ Requires:
 | `--no-progress`    | Disable verbose progress output                                 |
 | `--no-banner`      | Disable banner                                                  |
 
-## Benchmark code license
+## Plotting results
+
+Use `plot.py` to generate comparison charts from the JSON output of multiple benchmark runs:
+
+```bash
+python plot.py results_kfr.json results_ipp.json results_fftw.json
+```
+
+This generates SVG plots for every combination of data type, transform type, direction, and buffer mode (e.g. `float-complex-forward-inplace.svg`).
+
+## JSON output format
+
+Each benchmark run produces a JSON file with the following structure:
+
+```json
+{
+    "cpu": "...",
+    "clock_MHz": 3600.0,
+    "library": "...",
+    "results": [
+        {
+            "size": 1024,
+            "data": "float",
+            "type": "complex",
+            "direction": "forward",
+            "buffer": "outofplace",
+            "mflops": 12345.67,
+            "best_time": 0.83,
+            "avg_time": 0.91
+        }
+    ]
+}
+```
+
+For multidimensional transforms, `size` is an array (e.g. `[512, 512]`).
+
+## Legal Disclaimer
+
+All trademarks, product names, and company names are the property of their respective owners and are used for identification purposes only.
+
+## Author
+
+Dan Casarín, the author of [KFR](https://kfr.dev)
+
+## License
 
 MIT
+

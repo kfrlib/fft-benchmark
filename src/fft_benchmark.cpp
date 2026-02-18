@@ -1,6 +1,6 @@
 /**
  * FFT bencmarking tool (https://www.kfrlib.com)
- * Copyright (C) 2016-2023 Dan Cazarin
+ * Copyright (C) 2016-2026 Dan Cazarin
  * Benchmark source code is MIT-licensed
  * See LICENSE.txt for details
  */
@@ -70,8 +70,8 @@ struct benchmark_runner
         }
 
         size_t size = product(sizes);
-        real* in    = aligned_malloc<real>(size * 2 + 2);
-        real* out   = aligned_malloc<real>(size * 2 + 2);
+        real* in    = aligned_malloc<real>(size * 4 + 2);
+        real* out   = aligned_malloc<real>(size * 4 + 2);
         fill_random(in, size * 2);
         if (inplace)
             std::copy(in, in + size * 2, out);
@@ -307,7 +307,7 @@ int main(int argc, char** argv)
 
     if (banner)
     {
-        printf("FFT/DFT benchmarking tool. Copyright (C) 2016-2024 Dan Cazarin https://www.kfrlib.com\n");
+        printf("FFT/DFT benchmarking tool. Copyright (C) 2016-2026 Dan Cazarin https://www.kfrlib.com\n");
         printf("Benchmark source code is MIT-licensed\n");
         printf("DFT/FFT libraries have their own licenses. Please refer to the respective source code for "
                "details.\n");

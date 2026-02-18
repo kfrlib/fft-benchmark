@@ -1,10 +1,13 @@
 #pragma once
 
+#include <algorithm>
 #include <charconv>
+#include <cmath>
 #include <cstdlib>
 #include <string>
 #include <string_view>
 #include <type_traits>
+
 
 // minimalist JSON writer
 
@@ -113,12 +116,16 @@ inline void json_number(T number)
     json_comma();
     if constexpr (std::is_floating_point_v<T>)
     {
-        int e = 12 - ceil(log10(number));
+        int e = 12 - ceil(log10(abs(number)));
         e     = std::max(e, 0);
         e     = std::min(e, 20);
         char buf[128];
-        size_t wr = std::snprintf(buf, sizeof(buf), "%.*f", e, number);
-        json_append(std::string_view(std::begin(buf), std::min(wr, sizeof(buf))));
+        int wr = std::snprintf(buf, sizeof(buf), "%.*f", e, number);
+        if (wr < 0)
+        {
+            std::abort();
+        }
+        json_append(std::string_view(std::begin(buf), std::min(size_t(wr), sizeof(buf))));
     }
     else
     {

@@ -20,11 +20,12 @@ set(COMMON_SRCS ${CMAKE_CURRENT_LIST_DIR}/src/fft_benchmark.cpp ${CMAKE_CURRENT_
                 ${CMAKE_CURRENT_LIST_DIR}/src/benchmark.cpp ${CMAKE_CURRENT_LIST_DIR}/src/utils.cpp)
 
 function (add_fft NAME)
-    cmake_parse_arguments(LIB "" "" "SOURCES;LIBRARIES;INCLUDES" ${ARGN})
+    cmake_parse_arguments(LIB "" "" "SOURCES;LIBRARIES;INCLUDES;DEFINITIONS" ${ARGN})
 
     add_executable(fft_benchmark_${NAME} ${COMMON_SRCS} ${LIB_SOURCES})
     target_link_libraries(fft_benchmark_${NAME} PRIVATE ${LIB_LIBRARIES})
     target_include_directories(fft_benchmark_${NAME} PRIVATE ${COMMON_INCLUDES} ${LIB_INCLUDES})
+    target_compile_definitions(fft_benchmark_${NAME} PRIVATE ${LIB_DEFINITIONS})
 endfunction ()
 
 add_subdirectory(fftlibs)

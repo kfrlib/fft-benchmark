@@ -8,8 +8,8 @@ def plot(data, ticks, labels, title, topy, file=None):
     common_style = {'linestyle': '-', 'marker': 'o', 'markersize': 10.0, 'markeredgewidth': 2.0, 'markeredgecolor': '#FFFFFF'}
     styles = [
         dict(color = '#F6511D', **common_style),
-        dict(color = '#00A6ED', **common_style),
         dict(color = '#7FB800', **common_style),
+        dict(color = '#00A6ED', **common_style),
         dict(color = '#FFB400', **common_style),
         dict(color = '#983fd3', **common_style),
         dict(color = '#36cccc', **common_style),
@@ -51,16 +51,10 @@ results      = [json.load(open(f)) for f in files]
 libraries    = [r['library'] for r in results]
 all_results  = [re for r in results for re in r['results']]
 
-mflops_f     = [x.get('mflops') for x in all_results if x['data']=='float']
-mflops_d     = [x.get('mflops') for x in all_results if x['data']=='double']
-mflops_f_max = max(x for x in mflops_f if x is not None)
-mflops_d_max = max(x for x in mflops_d if x is not None)
-mflops_f_max = math.ceil(mflops_f_max/10000.0)*10000.0
-mflops_d_max = math.ceil(mflops_d_max/10000.0)*10000.0
-
 for data in ['float', 'double']:
-    topy = mflops_f_max if data=='float' else mflops_d_max
     for type in ['complex', 'real']:
+        mflops_max = max(x for x in [x.get('mflops') for x in all_results if x['data']==data and x['type']==type] if x is not None)
+        topy = math.ceil(mflops_max/10000.0)*10000.0
         for direction in ['forward', 'inverse']:
             for buffer in ['inplace', 'outofplace']:
                 title     = f'{data}-{type}-{direction}-{buffer}'

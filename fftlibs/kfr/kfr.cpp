@@ -1,6 +1,6 @@
 /**
  * FFT bencmarking tool (http://kfrlib.com)
- * Copyright (C) 2016-2023 Dan Cazarin
+ * Copyright (C) 2016-2026 Dan Cazarin
  * Benchmark source code is MIT-licensed
  * See LICENSE.txt for details
  */
@@ -134,7 +134,7 @@ fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, bool is_complex, 
     {
         size_t s = std::accumulate(size.begin(), size.end(), size_t(1), std::multiplies<>{});
         if (s & 1)
-            return nullptr;
+            return nullptr; // KFR real transform requires even sizes
     }
     return fft_create_for<fft_implementation, real>(size, is_complex, invert, inplace);
 }
