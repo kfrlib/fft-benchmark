@@ -101,3 +101,52 @@ jobs:
           retention-days: 10
           path: |
             /usr/local/share/vcpkg/buildtrees
+
+  windows-x86_64:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build Vcpkg dependencies
+        env:
+          VCPKG_TARGET_TRIPLET: x64-windows-static-md
+          VCPKG_HOST_TRIPLET: x64-windows-static-md
+        run: |
+          cd "$env:VCPKG_INSTALLATION_ROOT"
+          .\vcpkg install fftw3[avx2] sleef[dft] pffft juce[core]
+      - name: Get KFR7 binaries
+        env:
+          TMP_DIR: ${{ runner.temp }}
+          KFR_VER: 7.0.1
+        run: |
+          curl.exe -o "$env:TMP_DIR\kfr.zip" -L "https://github.com/kfrlib/kfr/releases/download/$env:KFR_VER/kfr-windows-x86_64.zip"
+          Expand-Archive -Path "$env:TMP_DIR\kfr.zip" -DestinationPath "$env:TMP_DIR\kfr"
+      - name: Install IPP & MKL
+        shell: cmd
+        run: |
+          curl.exe --output %TEMP%\webimage.exe --url "https://registrationcenter-download.intel.com/akdlm/IRC_NAS/1f18901e-877d-469d-a41a-a10f11b39336/intel-oneapi-base-toolkit-2025.3.0.372_offline.exe" --retry 5 --retry-delay 5
+          start /b /wait %TEMP%\webimage.exe -s -x -f webimage_extracted --log extract.log
+          del %TEMP%\webimage.exe
+          webimage_extracted\bootstrapper.exe -s --action install --components=intel.oneapi.win.ipp.devel:intel.oneapi.win.mkl.devel --eula=accept -p=NEED_VS2019_INTEGRATION=0 -p=NEED_VS2022_INTEGRATION=0 --log-dir=.
+          rd /s/q "webimage_extracted"
+      - name: Build benchmark
+        env:
+          TMP_DIR: ${{ runner.temp }}
+        run: |
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=$env:TMP_DIR/kfr/kfr-windows-x86_64/lib/cmake;$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows-static-md/share;C:/Program Files (x86)/Intel/oneAPI/ipp/latest/lib/cmake;C:/Program Files (x86)/Intel/oneAPI/mkl/latest/lib/cmake" -DCMAKE_C_COMPILER=C:/Program Files/LLVM/bin/clang-cl.exe -DCMAKE_CXX_COMPILER=C:/Program Files/LLVM/bin/clang-cl.exe -DCMAKE_LINKER="C:/Program Files/LLVM/bin/lld-link.exe"
+          ninja -C build
+          New-Item -ItemType Directory -Force -Path "${{ github.workspace }}\dist"
+          Copy-Item build\fft_benchmark_*.exe "${{ github.workspace }}\dist"
+      - name: Binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x86_64
+          path: ${{ github.workspace }}/dist
+      - name: Upload buildtrees
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vcpkg-buildtrees-windows
+          retention-days: 10
+          path: |
+            C:\vcpkg\buildtrees
