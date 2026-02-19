@@ -8,14 +8,14 @@ jobs:
         uses: actions/checkout@v4
       - name: Packages
         run: |
-          sudo apt-get update && sudo apt-get install -y wget cmake gnupg2 ninja-build build-essential unzip libx11-dev libxcomposite-dev libxext-dev libasound2-dev libfontconfig1-dev libglu1-mesa-dev mesa-common-dev
+          sudo apt-get update && sudo apt-get install -y wget cmake gnupg2 ninja-build build-essential unzip libx11-dev libxcomposite-dev libxext-dev libasound2-dev libfontconfig1-dev libglu1-mesa-dev mesa-common-dev libcurl4-openssl-dev
       - name: Build Vcpkg dependencies
         env:
           VCPKG_TARGET_TRIPLET: x64-linux
           VCPKG_HOST_TRIPLET: x64-linux
         run: |
           cd "$VCPKG_INSTALLATION_ROOT"
-          ./vcpkg install fftw3[avx2] sleef[dft] kissfft pffft juce[core]
+          ./vcpkg install juce[core]
       - name: Get KFR7 binaries
         env:
           TMP_DIR: ${{ runner.temp }}
@@ -48,9 +48,5 @@ jobs:
           path: ${{ github.workspace }}/dist
       - name: Upload buildtrees
         if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: vcpkg-buildtrees
-          retention-days: 10
-          path: |
-            /usr/local/share/vcpkg/buildtrees
+        run:
+          cat /usr/local/share/vcpkg/buildtrees/juce/config-x64-linux-out.log
