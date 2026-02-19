@@ -54,3 +54,50 @@ jobs:
           retention-days: 10
           path: |
             /usr/local/share/vcpkg/buildtrees
+
+  linux-arm64:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Packages
+        run: |
+          sudo apt-get update && sudo apt-get install -y wget cmake gnupg2 ninja-build build-essential unzip libx11-dev libxcomposite-dev libxext-dev libasound2-dev libfontconfig1-dev libglu1-mesa-dev mesa-common-dev libcurl4-openssl-dev libomp-dev
+      - name: Build Vcpkg dependencies
+        env:
+          VCPKG_TARGET_TRIPLET: arm64-linux
+          VCPKG_HOST_TRIPLET: arm64-linux
+        run: |
+          cd "$VCPKG_INSTALLATION_ROOT"
+          ./vcpkg install fftw3[neon] sleef[dft] pffft juce[core]
+      - name: Get KFR7 binaries
+        env:
+          TMP_DIR: ${{ runner.temp }}
+          KFR_VER: 7.0.1
+        run: |
+          curl -o "$TMP_DIR/kfr.zip" -L "https://github.com/kfrlib/kfr/releases/download/$KFR_VER/kfr-linux-arm64.zip"
+          unzip "$TMP_DIR/kfr.zip" -d "${TMP_DIR}/kfr"
+          ls -la "${TMP_DIR}/kfr/kfr-linux-arm64"
+      - name: Build benchmark
+        env:
+          TMP_DIR: ${{ runner.temp }}
+        run: |
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=${TMP_DIR}/kfr/kfr-linux-arm64/lib/cmake;$VCPKG_INSTALLATION_ROOT/installed/arm64-linux/share"
+          ninja -C build
+          ls -la build
+          file build/fft_benchmark_{fftw,kfr,sleef,kissfft,pffft,juce}
+          mkdir -p "${{ github.workspace }}/dist"
+          cp build/fft_benchmark_{fftw,kfr,sleef,kissfft,pffft,juce} "${{ github.workspace }}/dist"
+      - name: Binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-arm64
+          path: ${{ github.workspace }}/dist
+      - name: Upload buildtrees
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vcpkg-buildtrees-arm64
+          retention-days: 10
+          path: |
+            /usr/local/share/vcpkg/buildtrees
