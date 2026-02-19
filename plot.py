@@ -82,29 +82,35 @@ all_results = [re for r in results for re in r['performance']]
 # Iterate over data types (float, double) and process each combination
 for data in ['float', 'double']:
     for type in ['complex', 'real']:
-        # Find the maximum MFLOPS value for scaling the y-axis
-        mflops_max = max(
-            x for x in [x.get('mflops') for x in all_results if x['data'] == data and x['type'] == type] if x is not None
-        )
-        topy = math.ceil(mflops_max / 10000.0) * 10000.0
+        try:
+            print(f"Processing data type: {data}, type: {type}")
+            filtered_results = [x for x in all_results if x['data'] == data and x['type'] == type]
 
-        # Iterate over FFT directions and buffer types
-        for direction in ['forward', 'inverse']:
-            for buffer in ['inplace', 'outofplace']:
-                # Generate the plot title
-                title = f'{data}-{type}-{direction}-{buffer}'
-                print("Generating plot: ", title)
+            # Find the maximum MFLOPS value for scaling the y-axis
+            mflops_max = max(
+                x for x in [x.get('mflops') for x in filtered_results] if x is not None
+            )
+            topy = math.ceil(mflops_max / 10000.0) * 10000.0
 
-                # Extract sizes and values for the current configuration
-                sizes = [
-                    x['size'] for x in results[0]['performance']
-                    if x['data'] == data and x['type'] == type and x['direction'] == direction and x['buffer'] == buffer
-                ]
-                values = [
-                    [x.get('mflops') for x in r['performance']
-                     if x['data'] == data and x['type'] == type and x['direction'] == direction and x['buffer'] == buffer]
-                    for r in results
-                ]
+            # Iterate over FFT directions and buffer types
+            for direction in ['forward', 'inverse']:
+                for buffer in ['inplace', 'outofplace']:
+                    # Generate the plot title
+                    title = f'{data}-{type}-{direction}-{buffer}'
+                    print("Generating plot: ", title)
 
-                # Generate the plot
-                plot(values, sizes, libraries, title, topy, title + '.svg')
+                    # Extract sizes and values for the current configuration
+                    sizes = [
+                        x['size'] for x in results[0]['performance']
+                        if x['data'] == data and x['type'] == type and x['direction'] == direction and x['buffer'] == buffer
+                    ]
+                    values = [
+                        [x.get('mflops') for x in r['performance']
+                        if x['data'] == data and x['type'] == type and x['direction'] == direction and x['buffer'] == buffer]
+                        for r in results
+                    ]
+
+                    # Generate the plot
+                    plot(values, sizes, libraries, title, topy, 'plots/' + title + '.svg')
+        except Exception as e:
+            print(f"Error processing {data}-{type}: {e}")            

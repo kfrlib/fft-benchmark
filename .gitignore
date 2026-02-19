@@ -14,3 +14,6 @@ include
 .cache
 img
 .vscode
+
+data
+plots

@@ -85,9 +85,11 @@ struct benchmark_runner
         std::unique_ptr<fft_impl<real>> fft = fft_create<real>({ size }, is_complex, inverse, inplace);
         if (!fft)
         {
-            printf("%6s accuracy: %31s for %7s %7s %10s DFT of size %zu -- Not supported in the library\n",
-                   type_name<real>, "-", is_complex ? "complex" : "real", inverse ? "inverse" : "forward",
-                   inplace ? "inplace" : "outofplace", size);
+            if (progress)
+                printf(
+                    "%6s accuracy: %31s for %7s %7s %10s DFT of size %zu -- Not supported in the library\n",
+                    type_name<real>, "-", is_complex ? "complex" : "real", inverse ? "inverse" : "forward",
+                    inplace ? "inplace" : "outofplace", size);
             return -1;
         }
         const size_t in_size  = is_complex ? size * 2 : !inverse ? size : size / 2 * 2 + 2;
@@ -115,9 +117,10 @@ struct benchmark_runner
             maybe_rescale_inverse(out, out_size, size, inverse, err, refout);
             maxerr = compute_max_error(out.data(), refout, out_size);
         }
-        printf("%6s accuracy: %12g (max %12g) for %7s %7s %10s DFT of size %zu\n", type_name<real>, err,
-               maxerr, is_complex ? "complex" : "real", inverse ? "inverse" : "forward",
-               inplace ? "inplace" : "outofplace", size);
+        if (progress)
+            printf("%6s accuracy: %12g (max %12g) for %7s %7s %10s DFT of size %zu\n", type_name<real>, err,
+                   maxerr, is_complex ? "complex" : "real", inverse ? "inverse" : "forward",
+                   inplace ? "inplace" : "outofplace", size);
         return err;
     }
 
@@ -500,10 +503,10 @@ int main(int argc, char** argv)
     if (accuracy)
     {
         json_key("accuracy");
-        json_open_object();
+        json_open_array();
         benchmark_runner<float>::accuracy_tests(progress);
         benchmark_runner<double>::accuracy_tests(progress);
-        json_close_object();
+        json_close_array();
     }
 
     json_key("performance");
