@@ -8,7 +8,7 @@ jobs:
         uses: actions/checkout@v4
       - name: Packages
         run: |
-          sudo apt-get update && sudo apt-get install -y wget cmake gnupg2 ninja-build build-essential unzip libx11-dev libxcomposite-dev libxext-dev libasound2-dev libfontconfig1-dev libglu1-mesa-dev mesa-common-dev libcurl4-openssl-dev libomp-dev
+          sudo apt-get update && sudo apt-get install -y wget cmake gnupg2 ninja-build build-essential unzip libx11-dev libxcomposite-dev libxext-dev libasound2-dev libfontconfig1-dev libglu1-mesa-dev mesa-common-dev libcurl4-openssl-dev libomp-dev clang
       - name: Build Vcpkg dependencies
         env:
           VCPKG_TARGET_TRIPLET: x64-linux
@@ -35,7 +35,7 @@ jobs:
         env:
           TMP_DIR: ${{ runner.temp }}
         run: |
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=${TMP_DIR}/kfr/kfr-linux-x86_64/lib/cmake;$VCPKG_INSTALLATION_ROOT/installed/x64-linux/share;/opt/intel/oneapi/ipp/latest/lib/cmake;/opt/intel/oneapi/mkl/latest/lib/cmake"
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=${TMP_DIR}/kfr/kfr-linux-x86_64/lib/cmake;$VCPKG_INSTALLATION_ROOT/installed/x64-linux/share;/opt/intel/oneapi/ipp/latest/lib/cmake;/opt/intel/oneapi/mkl/latest/lib/cmake" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
           ninja -C build
           ls -la build
           file build/fft_benchmark_{fftw,kfr,ipp,mkl,sleef,kissfft,pffft,juce}
@@ -62,7 +62,7 @@ jobs:
         uses: actions/checkout@v4
       - name: Packages
         run: |
-          sudo apt-get update && sudo apt-get install -y wget cmake gnupg2 ninja-build build-essential unzip libx11-dev libxcomposite-dev libxext-dev libasound2-dev libfontconfig1-dev libglu1-mesa-dev mesa-common-dev libcurl4-openssl-dev libomp-dev
+          sudo apt-get update && sudo apt-get install -y wget cmake gnupg2 ninja-build build-essential unzip libx11-dev libxcomposite-dev libxext-dev libasound2-dev libfontconfig1-dev libglu1-mesa-dev mesa-common-dev libcurl4-openssl-dev libomp-dev clang
       - name: Build Vcpkg dependencies
         env:
           VCPKG_TARGET_TRIPLET: arm64-linux
@@ -82,7 +82,7 @@ jobs:
         env:
           TMP_DIR: ${{ runner.temp }}
         run: |
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=${TMP_DIR}/kfr/kfr-linux-arm64/lib/cmake;$VCPKG_INSTALLATION_ROOT/installed/arm64-linux/share"
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=${TMP_DIR}/kfr/kfr-linux-arm64/lib/cmake;$VCPKG_INSTALLATION_ROOT/installed/arm64-linux/share" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
           ninja -C build
           ls -la build
           file build/fft_benchmark_{fftw,kfr,sleef,kissfft,pffft,juce}
