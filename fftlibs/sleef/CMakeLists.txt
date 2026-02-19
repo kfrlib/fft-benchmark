@@ -1,11 +1,33 @@
 cmake_minimum_required(VERSION 3.12)
 
+find_package(OpenMP COMPONENTS C)
+
+if (NOT OpenMP_FOUND)
+    message(STATUS "OpenMP is not found.")
+endif ()
+if (NOT OpenMP_C_FOUND)
+    message(STATUS "OpenMP C is not found.")
+endif ()
+if (TARGET OpenMP::OpenMP_C)
+    message(STATUS "OpenMP C target is found.")
+else ()
+    message(STATUS "OpenMP C target is not found.")
+endif()
+
 # Add Sleef library
 find_package(sleef CONFIG)
 if (TARGET sleef::sleef)
     message(STATUS "Sleef ${sleef_VERSION} is found. Enabling Sleef")
 
-    add_fft(sleef SOURCES ${CMAKE_CURRENT_LIST_DIR}/sleef.cpp DEFINITIONS SLEEF_VERSION="${sleef_VERSION}"  LIBRARIES sleef::sleef sleef::sleefdft)
+    add_fft(
+        sleef
+        SOURCES
+        ${CMAKE_CURRENT_LIST_DIR}/sleef.cpp
+        DEFINITIONS
+        SLEEF_VERSION="${sleef_VERSION}"
+        LIBRARIES
+        sleef::sleef
+        sleef::sleefdft)
 else ()
     message(STATUS "sleef is not found. Please add it to your CMAKE_PREFIX_PATH.")
 endif ()
