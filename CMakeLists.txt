@@ -19,6 +19,10 @@ set(COMMON_INCLUDES ${CMAKE_CURRENT_LIST_DIR}/src)
 set(COMMON_SRCS ${CMAKE_CURRENT_LIST_DIR}/src/fft_benchmark.cpp ${CMAKE_CURRENT_LIST_DIR}/src/benchmark.hpp
                 ${CMAKE_CURRENT_LIST_DIR}/src/benchmark.cpp ${CMAKE_CURRENT_LIST_DIR}/src/utils.cpp)
 
+enable_testing()
+
+set(SIZES 64)
+
 function (add_fft NAME)
     cmake_parse_arguments(LIB "" "" "SOURCES;LIBRARIES;INCLUDES;DEFINITIONS" ${ARGN})
 
@@ -26,6 +30,9 @@ function (add_fft NAME)
     target_link_libraries(fft_benchmark_${NAME} PRIVATE ${LIB_LIBRARIES})
     target_include_directories(fft_benchmark_${NAME} PRIVATE ${COMMON_INCLUDES} ${LIB_INCLUDES})
     target_compile_definitions(fft_benchmark_${NAME} PRIVATE ${LIB_DEFINITIONS})
+
+    add_test(NAME benchmark_${NAME} COMMAND fft_benchmark_${NAME} --save ${CMAKE_BINARY_DIR}/results_${NAME}.json
+                                            --no-banner --no-progress ${SIZES} --complex y --inplace n --inverse n)
 endfunction ()
 
 add_subdirectory(fftlibs)

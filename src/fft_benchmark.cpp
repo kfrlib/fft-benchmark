@@ -331,7 +331,10 @@ int main(int argc, char** argv)
     if (progress)
     {
         printf("calibrating tsc...");
-        details::calibrate_tsc();
+    }
+    details::calibrate_tsc();
+    if (progress)
+    {
         printf(" %.1fMHz\n", 1000.0 / tsc_resolution());
 
         printf("%-6s %-7s %-9s %-10s %11s %12s | %14s%12s | %14s%12s | %7s\n", "data", "type", "direction",
