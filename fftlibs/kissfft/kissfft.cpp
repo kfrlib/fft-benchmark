@@ -11,6 +11,7 @@
 #include <cstring>
 #include <memory>
 #include <string>
+#include <variant>
 
 std::string fft_name() { return std::string("KISS FFT ") + KISSFFT_VERSION; }
 
