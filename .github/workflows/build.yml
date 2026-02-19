@@ -108,12 +108,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Build Vcpkg dependencies
-        env:
-          VCPKG_TARGET_TRIPLET: x64-windows-static-md
-          VCPKG_HOST_TRIPLET: x64-windows-static-md
         run: |
           cd "$env:VCPKG_INSTALLATION_ROOT"
-          .\vcpkg install fftw3[avx2] sleef[dft] pffft juce[core]
+          .\vcpkg install --triplet=x64-windows-static-md --host-triplet=x64-windows-static-md fftw3[avx2] sleef[dft] pffft juce[core]
       - name: Get KFR7 binaries
         env:
           TMP_DIR: ${{ runner.temp }}
@@ -133,7 +130,7 @@ jobs:
         env:
           TMP_DIR: ${{ runner.temp }}
         run: |
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=$env:TMP_DIR/kfr/kfr-windows-x86_64/lib/cmake;$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows-static-md/share;C:/Program Files (x86)/Intel/oneAPI/ipp/latest/lib/cmake;C:/Program Files (x86)/Intel/oneAPI/mkl/latest/lib/cmake" -DCMAKE_C_COMPILER=C:/Program Files/LLVM/bin/clang-cl.exe -DCMAKE_CXX_COMPILER=C:/Program Files/LLVM/bin/clang-cl.exe -DCMAKE_LINKER="C:/Program Files/LLVM/bin/lld-link.exe"
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=$env:TMP_DIR/kfr/kfr-windows-x86_64/lib/cmake;$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows-static-md/share;C:/Program Files (x86)/Intel/oneAPI/ipp/latest/lib/cmake;C:/Program Files (x86)/Intel/oneAPI/mkl/latest/lib/cmake" -DCMAKE_C_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" -DCMAKE_LINKER="C:/Program Files/LLVM/bin/lld-link.exe"
           ninja -C build
           New-Item -ItemType Directory -Force -Path "${{ github.workspace }}\dist"
           Copy-Item build\fft_benchmark_*.exe "${{ github.workspace }}\dist"
