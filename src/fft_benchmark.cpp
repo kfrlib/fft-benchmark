@@ -12,9 +12,27 @@
 
 #include "benchmark.hpp"
 #include <cmath>
+#include <numeric>
 #include <string>
 
 #include "json.hpp"
+
+extern "C" const double dft_testvector_complex_input60[];
+extern "C" const double dft_testvector_complex_output60[];
+extern "C" const double dft_testvector_complex_input61[];
+extern "C" const double dft_testvector_complex_output61[];
+extern "C" const double dft_testvector_complex_input62[];
+extern "C" const double dft_testvector_complex_output62[];
+extern "C" const double dft_testvector_complex_input64[];
+extern "C" const double dft_testvector_complex_output64[];
+extern "C" const double dft_testvector_real_input60[];
+extern "C" const double dft_testvector_real_output60[];
+extern "C" const double dft_testvector_real_input61[];
+extern "C" const double dft_testvector_real_output61[];
+extern "C" const double dft_testvector_real_input62[];
+extern "C" const double dft_testvector_real_output62[];
+extern "C" const double dft_testvector_real_input64[];
+extern "C" const double dft_testvector_real_output64[];
 
 template <typename real>
 void fill_random(real* in, size_t size)
@@ -24,10 +42,122 @@ void fill_random(real* in, size_t size)
 }
 
 template <typename real>
+static double rms(const real* a, const double* ref, size_t size)
+{
+    double sum = 0;
+    for (size_t i = 0; i < size; i++)
+    {
+        double diff = a[i] - ref[i];
+        sum += diff * diff;
+    }
+    return std::sqrt(sum / size);
+}
+
+template <typename real>
 struct benchmark_runner
 {
     constexpr static int preheat_calls = 1;
     constexpr static int calls_per_run = 10;
+
+    static double compute_max_error(const real* data, const double* refout, size_t out_size)
+    {
+        double maxerr = 0;
+        for (size_t i = 0; i < out_size; i++)
+            maxerr = std::max(maxerr, std::abs(data[i] - refout[i]));
+        return maxerr;
+    }
+
+    static void maybe_rescale_inverse(std::vector<real>& data, size_t out_size, size_t size, bool inverse,
+                                      double& err, const double* refout)
+    {
+        if (err > 1e-4 && inverse)
+        {
+            double scale = 1.0 / size;
+            for (size_t i = 0; i < out_size; i++)
+                data[i] *= static_cast<real>(scale);
+            err = rms(data.data(), refout, out_size);
+        }
+    }
+
+    template <bool is_complex, bool inverse, bool inplace>
+    static double accuracy_test(size_t size, const double* refout, const double* refin, bool progress)
+    {
+        std::unique_ptr<fft_impl<real>> fft = fft_create<real>({ size }, is_complex, inverse, inplace);
+        if (!fft)
+        {
+            printf("%6s accuracy: %31s for %7s %7s %10s DFT of size %zu -- Not supported in the library\n",
+                   type_name<real>, "-", is_complex ? "complex" : "real", inverse ? "inverse" : "forward",
+                   inplace ? "inplace" : "outofplace", size);
+            return -1;
+        }
+        const size_t in_size  = is_complex ? size * 2 : !inverse ? size : size / 2 * 2 + 2;
+        const size_t out_size = is_complex ? size * 2 : !inverse ? size / 2 * 2 + 2 : size;
+        double err, maxerr = 0;
+        if constexpr (inplace)
+        {
+            std::vector<real> inout(std::max(in_size, out_size));
+            inout.reserve(size * 2 + 2); // For safety
+            std::copy(refin, refin + in_size, inout.data());
+            fft->execute(inout.data(), inout.data());
+            err = rms(inout.data(), refout, out_size);
+            maybe_rescale_inverse(inout, out_size, size, inverse, err, refout);
+            maxerr = compute_max_error(inout.data(), refout, out_size);
+        }
+        else
+        {
+            std::vector<real> in(in_size);
+            std::vector<real> out(out_size);
+            in.reserve(size * 2 + 2); // For safety
+            out.reserve(size * 2 + 2); // For safety
+            std::copy(refin, refin + in_size, in.data());
+            fft->execute(out.data(), in.data());
+            err = rms(out.data(), refout, out_size);
+            maybe_rescale_inverse(out, out_size, size, inverse, err, refout);
+            maxerr = compute_max_error(out.data(), refout, out_size);
+        }
+        printf("%6s accuracy: %12g (max %12g) for %7s %7s %10s DFT of size %zu\n", type_name<real>, err,
+               maxerr, is_complex ? "complex" : "real", inverse ? "inverse" : "forward",
+               inplace ? "inplace" : "outofplace", size);
+        return err;
+    }
+
+    template <bool is_complex, bool inverse>
+    static double accuracy_test(size_t size, const double* refout, const double* refin, bool progress)
+    {
+        double err = accuracy_test<is_complex, inverse, false>(size, refout, refin, progress);
+        err        = std::max(err, accuracy_test<is_complex, inverse, true>(size, refout, refin, progress));
+        return err;
+    }
+
+    template <bool is_complex>
+    static void accuracy_test(size_t size, const double* refout, const double* refin, bool progress)
+    {
+        double err = accuracy_test<is_complex, false>(size, refout, refin, progress);
+        err        = std::max(err, accuracy_test<is_complex, true>(size, refin, refout, progress));
+        if (err < 0)
+            return;
+        json_open_object();
+        json_key("type");
+        json_string(type_name<real>);
+        json_key("size");
+        json_number(size);
+        json_key("log_error");
+        json_number(std::log10(err));
+        json_close_object();
+    }
+
+    static void accuracy_tests(bool progress)
+    {
+        accuracy_test<true>(60, dft_testvector_complex_output60, dft_testvector_complex_input60, progress);
+        accuracy_test<true>(61, dft_testvector_complex_output61, dft_testvector_complex_input61, progress);
+        accuracy_test<true>(62, dft_testvector_complex_output62, dft_testvector_complex_input62, progress);
+        accuracy_test<true>(64, dft_testvector_complex_output64, dft_testvector_complex_input64, progress);
+
+        accuracy_test<false>(60, dft_testvector_real_output60, dft_testvector_real_input60, progress);
+        accuracy_test<false>(61, dft_testvector_real_output61, dft_testvector_real_input61, progress);
+        accuracy_test<false>(62, dft_testvector_real_output62, dft_testvector_real_input62, progress);
+        accuracy_test<false>(64, dft_testvector_real_output64, dft_testvector_real_input64, progress);
+    }
 
     static void benchmark(std::vector<size_t> sizes, bool is_complex, bool inverse, bool inplace,
                           bool progress, uint32_t benchmark_duration = 2500)
@@ -55,6 +185,7 @@ struct benchmark_runner
         json_string(inplace_str(inplace));
 
         std::unique_ptr<fft_impl<real>> fft = fft_create<real>(sizes, is_complex, inverse, inplace);
+
         if (!fft)
         {
             json_key("error");
@@ -154,6 +285,7 @@ std::string execfile(std::string command)
 static std::string outname;
 static bool progress = true;
 static bool banner   = true;
+static bool accuracy = true;
 bool avx2only        = false;
 static std::vector<std::vector<size_t>> sizes;
 static std::vector<bool> is_complex_list{ true, false };
@@ -192,7 +324,7 @@ static std::vector<size_t> parse_size(std::string_view s)
 }
 
 template <typename real>
-static void run_t(std::vector<size_t> sizes, bool progress)
+static void run_t(const std::vector<size_t>& sizes, bool progress)
 {
     for (bool complex : is_complex_list)
     {
@@ -206,7 +338,7 @@ static void run_t(std::vector<size_t> sizes, bool progress)
     }
 }
 
-static void run(std::vector<size_t> sizes, bool progress)
+static void run(const std::vector<size_t>& sizes, bool progress)
 {
     run_t<float>(sizes, progress);
     run_t<double>(sizes, progress);
@@ -250,6 +382,14 @@ int main(int argc, char** argv)
         else if (argv[i] == "--progress"sv)
         {
             progress = true;
+        }
+        else if (argv[i] == "--no-accuracy"sv)
+        {
+            accuracy = false;
+        }
+        else if (argv[i] == "--accuracy"sv)
+        {
+            accuracy = true;
         }
         else if (argv[i] == "--no-banner"sv)
         {
@@ -333,15 +473,20 @@ int main(int argc, char** argv)
         printf("calibrating tsc...");
     }
     details::calibrate_tsc();
+
     if (progress)
     {
         printf(" %.1fMHz\n", 1000.0 / tsc_resolution());
+    }
+
+    json_open_object();
+
+    if (progress)
+    {
 
         printf("%-6s %-7s %-9s %-10s %11s %12s | %14s%12s | %14s%12s | %7s\n", "data", "type", "direction",
                "buffer", "size", "mflops", "best time", "(ops/sec)", "avg. time", "(ops/sec)", "calls");
     }
-
-    json_open_object();
 
     json_key("cpu");
     json_string(cpuname);
@@ -352,7 +497,16 @@ int main(int argc, char** argv)
     json_key("library");
     json_string(fftname);
 
-    json_key("results");
+    if (accuracy)
+    {
+        json_key("accuracy");
+        json_open_object();
+        benchmark_runner<float>::accuracy_tests(progress);
+        benchmark_runner<double>::accuracy_tests(progress);
+        json_close_object();
+    }
+
+    json_key("performance");
     json_open_array();
 
     if (sizes.empty())

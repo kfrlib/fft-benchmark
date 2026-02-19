@@ -97,8 +97,8 @@ public:
     PICK;
 
     using IppsDFTSpec_R_T                      = pick_t<IppsDFTSpec_R_32f, IppsDFTSpec_R_64f>;
-    constexpr static auto ippsDFTInv_PermToR_T = pick(ippsDFTInv_PermToR_32f, ippsDFTInv_PermToR_64f);
-    constexpr static auto ippsDFTFwd_RToPerm_T = pick(ippsDFTFwd_RToPerm_32f, ippsDFTFwd_RToPerm_64f);
+    constexpr static auto ippsDFTInv_CCSToR_T = pick(ippsDFTInv_CCSToR_32f, ippsDFTInv_CCSToR_64f);
+    constexpr static auto ippsDFTFwd_RToCCS_T = pick(ippsDFTFwd_RToCCS_32f, ippsDFTFwd_RToCCS_64f);
     constexpr static auto ippsDFTGetSize_R_T   = pick(ippsDFTGetSize_R_32f, ippsDFTGetSize_R_64f);
     constexpr static auto ippsDFTInit_R_T      = pick(ippsDFTInit_R_32f, ippsDFTInit_R_64f);
 
@@ -118,11 +118,11 @@ public:
     {
         if constexpr (invert)
         {
-            ippsDFTInv_PermToR_T(in, out, plan, temp);
+            ippsDFTInv_CCSToR_T(in, out, plan, temp);
         }
         else
         {
-            ippsDFTFwd_RToPerm_T(in, out, plan, temp);
+            ippsDFTFwd_RToCCS_T(in, out, plan, temp);
         }
     }
     ~fft_implementation()

@@ -12,7 +12,7 @@
 #include <sleefdft.h>
 #include <string>
 
-std::string fft_name() { return std::string("Sleef DFT (") + SLEEF_VERSION + ")"; }
+std::string fft_name() { return std::string("Sleef DFT ") + SLEEF_VERSION; }
 
 // Default: unsupported configurations
 template <int Dims, typename real, bool is_complex, bool invert, bool inplace>
@@ -41,6 +41,11 @@ public:
         uint64_t mode = dft_flags;
         mode |= invert ? SLEEF_MODE_BACKWARD : SLEEF_MODE_FORWARD;
         plan = fn_init(static_cast<uint32_t>(sizes[0]), nullptr, nullptr, mode);
+        if (!plan)
+        {
+            fprintf(stderr, "Sleef DFT: failed to initialize plan for size %zu\n", sizes[0]);
+            std::abort();
+        }
     }
 
     void execute(real* out, const real* in) { fn_execute(plan, in, out); }
@@ -122,6 +127,8 @@ fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, bool is_complex, 
 {
     if (size.size() != 1)
         return nullptr; // Sleef DFT only supports 1D transforms
+    if ((size[0] & (size[0] - 1)) != 0)
+        return nullptr; // Sleef DFT requires power-of-2 sizes
     return fft_create_for<fft_implementation, real>(size, is_complex, invert, inplace);
 }
 

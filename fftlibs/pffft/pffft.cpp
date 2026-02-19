@@ -10,7 +10,6 @@
 #include <pffft/pffft.h>
 #include <string>
 
-
 std::string fft_name() { return "pffft (pffft_simd_size()=" + std::to_string(pffft_simd_size()) + ")"; }
 
 template <int Dims, typename real, bool is_complex, bool invert, bool inplace>
@@ -61,6 +60,9 @@ public:
     void execute(float* out, const float* in)
     {
         pffft_transform_ordered(setup, in, out, work, PFFFT_FORWARD);
+        out[N]     = out[1];
+        out[N + 1] = 0;
+        out[1]     = 0;
     }
 
     ~fft_implementation()
@@ -88,6 +90,7 @@ public:
 
     void execute(float* out, const float* in)
     {
+        const_cast<float*>(in)[1] = in[N];
         pffft_transform_ordered(setup, in, out, work, PFFFT_BACKWARD);
     }
 
@@ -106,6 +109,15 @@ private:
 template <typename real>
 fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, bool is_complex, bool invert, bool inplace)
 {
+    /* unfortunately, the fft size must be a multiple of 16 for complex FFTs
+       and 32 for real FFTs -- a lot of stuff would need to be rewritten to
+       handle other cases (or maybe just switch to a scalar fft, I don't know..) */
+    if (size.size() != 1)
+        return nullptr; // pffft only supports 1D transforms
+    if (is_complex && (size[0] % (pffft_simd_size() * pffft_simd_size())) != 0)
+        return nullptr; // pffft complex transform requires sizes that are multiples of SIMD_SZ^2
+    if (!is_complex && (size[0] % (2 * pffft_simd_size() * pffft_simd_size())) != 0)
+        return nullptr; // pffft real transform requires sizes that are multiples of 2*SIMD_SZ^2
     return fft_create_for<fft_implementation, real>(size, is_complex, invert, inplace);
 }
 

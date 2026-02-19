@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.12)
 
+set(KISSFFT_VERSION 131.2.0)
+
 add_subdirectory(kfr)
 add_subdirectory(ipp)
 add_subdirectory(mkl)

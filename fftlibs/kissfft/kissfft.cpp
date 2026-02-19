@@ -5,14 +5,14 @@
  * See LICENSE.txt for details
  */
 
+#include "../kissfft.hh"
 #include "benchmark.hpp"
 #include <complex>
 #include <cstring>
-#include <kissfft.hh>
 #include <memory>
 #include <string>
 
-std::string fft_name() { return std::string("KISS FFT (") + KISSFFT_VERSION + ")"; }
+std::string fft_name() { return std::string("KISS FFT ") + KISSFFT_VERSION; }
 
 // Default: unsupported configurations
 template <int Dims, typename real, bool is_complex, bool invert, bool inplace>
@@ -28,16 +28,31 @@ class fft_implementation<1, real, true, invert, inplace> : public fft_impl<real>
 public:
     using cpx_t = std::complex<real>;
 
-    fft_implementation(sizes_t<1> sizes) : N(sizes[0]), fft(sizes[0], invert) {}
+    fft_implementation(sizes_t<1> sizes) : N(sizes[0]), fft(sizes[0], invert)
+    {
+        if constexpr (inplace)
+        {
+            scratch.resize(N);
+        }
+    }
 
     void execute(real* out, const real* in)
     {
-        fft.transform(reinterpret_cast<const cpx_t*>(in), reinterpret_cast<cpx_t*>(out));
+        if constexpr (inplace)
+        {
+            std::memcpy(scratch.data(), in, N * sizeof(cpx_t));
+            fft.transform(reinterpret_cast<const cpx_t*>(scratch.data()), reinterpret_cast<cpx_t*>(out));
+        }
+        else
+        {
+            fft.transform(reinterpret_cast<const cpx_t*>(in), reinterpret_cast<cpx_t*>(out));
+        }
     }
 
 private:
     size_t N;
     kissfft<real> fft;
+    std::conditional_t<inplace, std::vector<cpx_t>, std::monostate> scratch;
 };
 
 // real forward (real-to-complex), 1D only
@@ -48,13 +63,34 @@ class fft_implementation<1, real, false, false, inplace> : public fft_impl<real>
 public:
     using cpx_t = std::complex<real>;
 
-    fft_implementation(sizes_t<1> sizes) : N(sizes[0]), fft(sizes[0] / 2, false) {}
+    fft_implementation(sizes_t<1> sizes) : N(sizes[0]), fft(sizes[0] / 2, false)
+    {
+        if constexpr (inplace)
+        {
+            scratch.resize(N);
+        }
+    }
 
-    void execute(real* out, const real* in) { fft.transform_real(in, reinterpret_cast<cpx_t*>(out)); }
+    void execute(real* out, const real* in)
+    {
+        if constexpr (inplace)
+        {
+            std::memcpy(scratch.data(), in, N * sizeof(real));
+            fft.transform_real(scratch.data(), reinterpret_cast<cpx_t*>(out));
+        }
+        else
+        {
+            fft.transform_real(in, reinterpret_cast<cpx_t*>(out));
+        }
+        out[N]     = out[1];
+        out[N + 1] = 0;
+        out[1]     = 0;
+    }
 
 private:
     size_t N;
     kissfft<real> fft;
+    std::conditional_t<inplace, std::vector<real>, std::monostate> scratch;
 };
 
 template <typename real>
@@ -62,8 +98,6 @@ fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, bool is_complex, 
 {
     if (size.size() != 1)
         return nullptr; // only 1D transforms are supported
-    if (inplace)
-        return nullptr; // KissFFT does not support inplace transforms
     if (!is_complex && invert)
         return nullptr; // KissFFT does not support real inverse transforms
     if (!is_complex && size[0] % 2 != 0)

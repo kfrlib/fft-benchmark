@@ -15,7 +15,7 @@ jobs:
           VCPKG_HOST_TRIPLET: x64-linux
         run: |
           cd "$VCPKG_INSTALLATION_ROOT"
-          ./vcpkg install fftw3[avx2] sleef[dft] kissfft pffft juce[core]
+          ./vcpkg install fftw3[avx2] sleef[dft] pffft juce[core]
       - name: Get KFR7 binaries
         env:
           TMP_DIR: ${{ runner.temp }}

@@ -77,7 +77,7 @@ results = [json.load(open(f)) for f in files]
 
 # Extract library names and all results
 libraries = [r['library'] for r in results]
-all_results = [re for r in results for re in r['results']]
+all_results = [re for r in results for re in r['performance']]
 
 # Iterate over data types (float, double) and process each combination
 for data in ['float', 'double']:
@@ -97,11 +97,11 @@ for data in ['float', 'double']:
 
                 # Extract sizes and values for the current configuration
                 sizes = [
-                    x['size'] for x in results[0]['results']
+                    x['size'] for x in results[0]['performance']
                     if x['data'] == data and x['type'] == type and x['direction'] == direction and x['buffer'] == buffer
                 ]
                 values = [
-                    [x.get('mflops') for x in r['results']
+                    [x.get('mflops') for x in r['performance']
                      if x['data'] == data and x['type'] == type and x['direction'] == direction and x['buffer'] == buffer]
                     for r in results
                 ]
