@@ -116,6 +116,7 @@ jobs:
           VCPKG_HOST_TRIPLET: arm64-osx
           OpenMP_ROOT: /opt/homebrew/opt/libomp
         run: |
+          export LDFLAGS="$LDFLAGS -L${OpenMP_ROOT}/lib"
           cd "$VCPKG_INSTALLATION_ROOT"
           ./vcpkg install fftw3[neon] sleef[dft] pffft juce[core] --allow-unsupported
       - name: Get KFR7 binaries
@@ -131,6 +132,7 @@ jobs:
           TMP_DIR: ${{ runner.temp }}
           OpenMP_ROOT: /opt/homebrew/opt/libomp
         run: |
+          export LDFLAGS="$LDFLAGS -L${OpenMP_ROOT}/lib"
           cmake -B build -S . -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=${TMP_DIR}/kfr/kfr-macos-arm64/lib/cmake;$VCPKG_INSTALLATION_ROOT/installed/arm64-osx/share"
           ninja -C build
           ls -la build
