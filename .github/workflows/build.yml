@@ -116,7 +116,7 @@ jobs:
           VCPKG_HOST_TRIPLET: arm64-osx
         run: |
           cd "$VCPKG_INSTALLATION_ROOT"
-          ./vcpkg install fftw3[neon] sleef[dft] pffft juce[core]
+          ./vcpkg install fftw3[neon] sleef[dft] pffft juce[core] --allow-unsupported
       - name: Get KFR7 binaries
         env:
           TMP_DIR: ${{ runner.temp }}
