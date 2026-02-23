@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.12)
 
+list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt/libomp")
+
 find_package(OpenMP COMPONENTS C)
 
 if (NOT OpenMP_FOUND)

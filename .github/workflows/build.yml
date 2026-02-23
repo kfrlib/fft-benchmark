@@ -129,7 +129,7 @@ jobs:
         env:
           TMP_DIR: ${{ runner.temp }}
         run: |
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=${TMP_DIR}/kfr/kfr-macos-arm64/lib/cmake;$VCPKG_INSTALLATION_ROOT/installed/arm64-osx/share"
+          cmake -B build -S . -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=${TMP_DIR}/kfr/kfr-macos-arm64/lib/cmake;$VCPKG_INSTALLATION_ROOT/installed/arm64-osx/share"
           ninja -C build
           ls -la build
           file build/fft_benchmark_{fftw,kfr,sleef,kissfft,pffft,juce}
