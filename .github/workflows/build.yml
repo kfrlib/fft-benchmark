@@ -50,9 +50,9 @@ jobs:
           cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=${TMP_DIR}/kfr/kfr-linux-x86_64/lib/cmake;${{ github.workspace }}/vcpkg_installed/x64-linux/share;/opt/intel/oneapi/ipp/latest/lib/cmake;/opt/intel/oneapi/mkl/latest/lib/cmake" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
           ninja -C build
           ls -la build
-          file build/fft_benchmark_{fftw,kfr,ipp,mkl,sleef,kissfft,pffft,juce}
+          file build/fft_benchmark_*
           mkdir -p "${{ github.workspace }}/dist"
-          cp build/fft_benchmark_{fftw,kfr,ipp,mkl,sleef,kissfft,pffft,juce} "${{ github.workspace }}/dist"
+          cp build/fft_benchmark_* "${{ github.workspace }}/dist"
       - name: Binaries
         uses: actions/upload-artifact@v4
         with:
@@ -109,9 +109,9 @@ jobs:
           cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=${TMP_DIR}/kfr/kfr-linux-arm64/lib/cmake;${{ github.workspace }}/vcpkg_installed/arm64-linux/share" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DVCPKG_TARGET_TRIPLET=arm64-linux -DVCPKG_HOST_TRIPLET=arm64-linux
           ninja -C build
           ls -la build
-          file build/fft_benchmark_{fftw,kfr,sleef,kissfft,pffft,juce}
+          file build/fft_benchmark_*
           mkdir -p "${{ github.workspace }}/dist"
-          cp build/fft_benchmark_{fftw,kfr,sleef,kissfft,pffft,juce} "${{ github.workspace }}/dist"
+          cp build/fft_benchmark_* "${{ github.workspace }}/dist"
       - name: Binaries
         uses: actions/upload-artifact@v4
         with:
@@ -168,9 +168,9 @@ jobs:
           cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=${TMP_DIR}/kfr/kfr-macos-arm64/lib/cmake;${{ github.workspace }}/vcpkg_installed/arm64-osx/share"
           ninja -C build
           ls -la build
-          file build/fft_benchmark_{fftw,kfr,sleef,kissfft,pffft,juce}
+          file build/fft_benchmark_*
           mkdir -p "${{ github.workspace }}/dist"
-          cp build/fft_benchmark_{fftw,kfr,sleef,kissfft,pffft,juce} "${{ github.workspace }}/dist"
+          cp build/fft_benchmark_* "${{ github.workspace }}/dist"
       - name: Binaries
         uses: actions/upload-artifact@v4
         with:
