@@ -1,0 +1,32 @@
+{
+    "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+    "dependencies": [
+        {
+            "name": "fftw3",
+            "features": [
+                "avx2"
+            ],
+            "platform": "x64"
+        },
+        {
+            "name": "fftw3",
+            "features": [
+                "neon"
+            ],
+            "platform": "arm64"
+        },
+        {
+            "name": "sleef",
+            "features": [
+                "dft"
+            ]
+        },
+        {
+            "name": "pffft"
+        },
+        {
+            "name": "juce",
+            "default-features": false
+        }
+    ]
+}

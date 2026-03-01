@@ -1,0 +1,40 @@
+diff --git a/Configure.cmake b/Configure.cmake
+index 178ea44..30d90b6 100644
+--- a/Configure.cmake
++++ b/Configure.cmake
+@@ -817,11 +817,15 @@ endif()
+ 
+ if(NOT SLEEF_DISABLE_OPENMP)
+   set(CMAKE_REQUIRED_FLAGS)
++  if (APPLE)
++    list(APPEND CMAKE_PREFIX_PATH /opt/homebrew/opt/libomp)
++  endif ()
+   find_package(OpenMP)
+   # Check if compilation with OpenMP really succeeds
+   # It might not succeed even though find_package(OpenMP) succeeds.
+   if(OPENMP_FOUND)
+     set (CMAKE_REQUIRED_FLAGS "${OpenMP_C_FLAGS}")
++    set (CMAKE_REQUIRED_LIBRARIES ${OpenMP_C_LIBRARIES})
+     CHECK_C_SOURCE_COMPILES("
+   #include <stdio.h>
+   int main() {
+diff --git a/src/dft/CMakeLists.txt b/src/dft/CMakeLists.txt
+index d404273..a12ec72 100644
+--- a/src/dft/CMakeLists.txt
++++ b/src/dft/CMakeLists.txt
+@@ -306,6 +306,7 @@ add_dependencies(dftcommon_obj ${TARGET_HEADERS} dispatchparam.h_generated)
+ set_source_files_properties(${sleef_BINARY_DIR}/include/sleef.h PROPERTIES GENERATED TRUE)
+ set_target_properties(dftcommon_obj PROPERTIES ${COMMON_TARGET_PROPERTIES})
+ target_compile_definitions(dftcommon_obj PRIVATE ${COMMON_TARGET_DEFINITIONS})
++target_link_libraries(dftcommon_obj PRIVATE OpenMP::OpenMP_C)
+ 
+ # Target dft.o
+ 
+@@ -313,6 +314,7 @@ add_library(dft_obj OBJECT dft.cpp dftcommon.hpp)
+ add_dependencies(dft_obj "dispatchdp.hpp_generated" "dispatchsp.hpp_generated" dispatchparam.h_generated ${TARGET_HEADERS})
+ set_target_properties(dft_obj PROPERTIES ${COMMON_TARGET_PROPERTIES})
+ target_compile_definitions(dft_obj PRIVATE ${COMMON_TARGET_DEFINITIONS})
++target_link_libraries(dft_obj PRIVATE OpenMP::OpenMP_C)
+ 
+ # Copy unroll*.cpp.in to ${CMAKE_CURRENT_BINARY_DIR}
+ 

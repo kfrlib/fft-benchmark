@@ -1,18 +1,12 @@
 cmake_minimum_required(VERSION 3.12)
 
-find_package(OpenMP COMPONENTS C)
+include(CheckCSourceCompiles)
 
-if (NOT OpenMP_FOUND)
-    message(STATUS "OpenMP is not found.")
+if (APPLE)
+    list(APPEND CMAKE_PREFIX_PATH /opt/homebrew/opt/libomp)
 endif ()
-if (NOT OpenMP_C_FOUND)
-    message(STATUS "OpenMP C is not found.")
-endif ()
-if (TARGET OpenMP::OpenMP_C)
-    message(STATUS "OpenMP C target is found.")
-else ()
-    message(STATUS "OpenMP C target is not found.")
-endif()
+message(STATUS "CMAKE_PREFIX_PATH: ${CMAKE_PREFIX_PATH}")
+find_package(OpenMP COMPONENTS C)
 
 # Add Sleef library
 find_package(sleef CONFIG)

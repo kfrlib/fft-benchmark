@@ -3,6 +3,37 @@ cmake_minimum_required(VERSION 3.12)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_EXTENSIONS ON)
 
+if (APPLE)
+    list(APPEND CMAKE_PREFIX_PATH /opt/homebrew/opt/libomp)
+endif ()
+
+set(VCPKG_ROOT ${CMAKE_SOURCE_DIR}/vcpkg)
+set(VCPKG_MANIFEST_MODE
+    TRUE
+    CACHE BOOL "")
+set(ENV{VCPKG_ROOT} ${VCPKG_ROOT})
+
+set(VCPKG_INSTALL_OPTIONS "--allow-unsupported")
+
+if (APPLE)
+    set(CMAKE_OSX_ARCHITECTURES "arm64")
+    set(VCPKG_TARGET_TRIPLET "arm64-osx")
+    set(VCPKG_HOST_TRIPLET "arm64-osx")
+elseif (WIN32)
+    set(VCPKG_TARGET_TRIPLET "x64-windows-static-md")
+    set(VCPKG_HOST_TRIPLET "x64-windows-static-md")
+else ()
+    set(VCPKG_TARGET_TRIPLET "x64-linux")
+    set(VCPKG_HOST_TRIPLET "x64-linux")
+endif ()
+
+set(CMAKE_TOOLCHAIN_FILE
+    ${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake
+    CACHE PATH "")
+set(VCPKG_INSTALLED_DIR
+    ${CMAKE_SOURCE_DIR}/vcpkg_installed
+    CACHE PATH "")
+
 project(fft_benchmark)
 
 if (MSVC)

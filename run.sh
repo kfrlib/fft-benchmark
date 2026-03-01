@@ -12,8 +12,8 @@ mkdir -p data
 
 for LIB in kfr fftw ipp mkl sleef kissfft pffft juce; do
     if [ ! -f "build/fft_benchmark_${LIB}${SUFFIX}" ]; then
-        echo "Error: build/fft_benchmark_${LIB}${SUFFIX} not found. Please build the project first."
-        exit 1
+        echo "Warning: build/fft_benchmark_${LIB}${SUFFIX} not found. Skipping ${LIB} benchmark."
+        continue
     fi
 
     echo "================================"
