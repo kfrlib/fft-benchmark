@@ -5,11 +5,20 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       VCPKG_FEATURE_FLAGS: manifests
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-cache
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/.vcpkg-cache,readwrite
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
+      - name: Cache vcpkg binary artifacts
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
+          key: ${{ runner.os }}-${{ runner.arch }}-vcpkg-bincache-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'ports/**') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-vcpkg-bincache-
       - name: Packages
         run: |
           sudo apt-get update && sudo apt-get install -y wget cmake gnupg2 ninja-build build-essential unzip libx11-dev libxcomposite-dev libxext-dev libasound2-dev libfontconfig1-dev libglu1-mesa-dev mesa-common-dev libcurl4-openssl-dev libomp-dev clang
@@ -59,11 +68,20 @@ jobs:
     runs-on: ubuntu-24.04-arm
     env:
       VCPKG_FEATURE_FLAGS: manifests
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-cache
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/.vcpkg-cache,readwrite
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
+      - name: Cache vcpkg binary artifacts
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
+          key: ${{ runner.os }}-${{ runner.arch }}-vcpkg-bincache-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'ports/**') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-vcpkg-bincache-
       - name: Packages
         run: |
           sudo apt-get update && sudo apt-get install -y wget cmake gnupg2 ninja-build build-essential unzip libx11-dev libxcomposite-dev libxext-dev libasound2-dev libfontconfig1-dev libglu1-mesa-dev mesa-common-dev libcurl4-openssl-dev libomp-dev clang
@@ -106,11 +124,20 @@ jobs:
     runs-on: macos-14
     env:
       VCPKG_FEATURE_FLAGS: manifests
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-cache
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/.vcpkg-cache,readwrite
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
+      - name: Cache vcpkg binary artifacts
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
+          key: ${{ runner.os }}-${{ runner.arch }}-vcpkg-bincache-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'ports/**') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-vcpkg-bincache-
       - name: Packages
         run: |
           brew install cmake ninja libomp
@@ -153,11 +180,20 @@ jobs:
     runs-on: windows-latest
     env:
       VCPKG_FEATURE_FLAGS: manifests
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\.vcpkg-cache
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}\.vcpkg-cache,readwrite
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
+      - name: Cache vcpkg binary artifacts
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
+          key: ${{ runner.os }}-${{ runner.arch }}-vcpkg-bincache-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'ports/**') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-vcpkg-bincache-
       - name: Bootstrap local vcpkg
         run: |
           .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
