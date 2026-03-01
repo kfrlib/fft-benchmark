@@ -1,5 +1,3 @@
-cmake_minimum_required(VERSION 3.12)
-
 set(KISSFFT_VERSION 131.2.0)
 
 add_subdirectory(kfr)
@@ -10,3 +8,6 @@ add_subdirectory(pffft)
 add_subdirectory(juce)
 add_subdirectory(kissfft)
 add_subdirectory(sleef)
+if (APPLE)
+    add_subdirectory(vdsp)
+endif ()

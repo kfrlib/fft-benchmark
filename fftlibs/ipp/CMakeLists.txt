@@ -1,5 +1,3 @@
-cmake_minimum_required(VERSION 3.12)
-
 find_package(IPP CONFIG)
 
 if (IPP_FOUND AND IPP_ipps_FOUND)

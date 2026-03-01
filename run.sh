@@ -10,7 +10,7 @@ fi
 
 mkdir -p data
 
-for LIB in kfr fftw ipp mkl sleef kissfft pffft juce; do
+for LIB in kfr fftw ipp mkl sleef kissfft pffft juce vdsp; do
     if [ ! -f "build/fft_benchmark_${LIB}${SUFFIX}" ]; then
         echo "Warning: build/fft_benchmark_${LIB}${SUFFIX} not found. Skipping ${LIB} benchmark."
         continue

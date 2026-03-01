@@ -1,5 +1,3 @@
-cmake_minimum_required(VERSION 3.12)
-
 find_package(JUCE CONFIG)
 
 if (TARGET juce::juce_dsp)

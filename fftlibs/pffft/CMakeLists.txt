@@ -1,5 +1,3 @@
-cmake_minimum_required(VERSION 3.12)
-
 # Add PFFFT library
 find_package(pffft CONFIG)
 if (TARGET pffft::pffft)

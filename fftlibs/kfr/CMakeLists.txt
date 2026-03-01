@@ -1,5 +1,3 @@
-cmake_minimum_required(VERSION 3.12)
-
 find_package(KFR CONFIG)
 if (KFR_FOUND)
     message(STATUS "KFR ${KFR_VERSION} is found. Enabling KFR")

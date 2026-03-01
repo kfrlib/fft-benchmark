@@ -1,5 +1,3 @@
-cmake_minimum_required(VERSION 3.12)
-
 set(MKL_THREADING sequential CACHE STRING "" FORCE)
 set(MKL_LINK static CACHE STRING "" FORCE)
 

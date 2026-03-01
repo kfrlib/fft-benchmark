@@ -1,10 +1,7 @@
-cmake_minimum_required(VERSION 3.12)
-
-
 if (APPLE)
     list(APPEND CMAKE_PREFIX_PATH /opt/homebrew/opt/libomp)
 endif ()
-message(STATUS "CMAKE_PREFIX_PATH: ${CMAKE_PREFIX_PATH}")
+
 find_package(OpenMP COMPONENTS C)
 
 # Add Sleef library
