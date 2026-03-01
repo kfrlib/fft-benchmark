@@ -1,6 +1,5 @@
 cmake_minimum_required(VERSION 3.12)
 
-include(CheckCSourceCompiles)
 
 if (APPLE)
     list(APPEND CMAKE_PREFIX_PATH /opt/homebrew/opt/libomp)
