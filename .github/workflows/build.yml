@@ -192,6 +192,14 @@ jobs:
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\.vcpkg-cache
       VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}\.vcpkg-cache,readwrite
     steps:
+      - name: Install IPP & MKL
+        shell: cmd
+        run: |
+          curl.exe --output %TEMP%\webimage.exe --url "https://registrationcenter-download.intel.com/akdlm/IRC_NAS/1f18901e-877d-469d-a41a-a10f11b39336/intel-oneapi-base-toolkit-2025.3.0.372_offline.exe" --retry 5 --retry-delay 5
+          start /b /wait %TEMP%\webimage.exe -s -x -f webimage_extracted --log extract.log
+          del %TEMP%\webimage.exe
+          webimage_extracted\bootstrapper.exe -s --action install --components=intel.oneapi.win.ipp.devel:intel.oneapi.win.mkl.devel --eula=accept -p=NEED_VS2019_INTEGRATION=0 -p=NEED_VS2022_INTEGRATION=0 --log-dir=.
+          rd /s/q "webimage_extracted"
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -205,7 +213,7 @@ jobs:
             ${{ runner.os }}-${{ runner.arch }}-vcpkg-bincache-
       - name: Ensure vcpkg cache directory
         run: |
-          New-Item -ItemType Directory -Force -Path "$env:VCPKG_DEFAULT_BINARY_CACHE" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$env:VCPKG_DEFAULT_BINARY_CACHE"
       - name: Bootstrap local vcpkg
         run: |
           .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
@@ -216,18 +224,11 @@ jobs:
         run: |
           curl.exe -o "$env:TMP_DIR\kfr.zip" -L "https://github.com/kfrlib/kfr/releases/download/$env:KFR_VER/kfr-windows-x86_64.zip"
           Expand-Archive -Path "$env:TMP_DIR\kfr.zip" -DestinationPath "$env:TMP_DIR\kfr"
-      - name: Install IPP & MKL
-        shell: cmd
-        run: |
-          curl.exe --output %TEMP%\webimage.exe --url "https://registrationcenter-download.intel.com/akdlm/IRC_NAS/1f18901e-877d-469d-a41a-a10f11b39336/intel-oneapi-base-toolkit-2025.3.0.372_offline.exe" --retry 5 --retry-delay 5
-          start /b /wait %TEMP%\webimage.exe -s -x -f webimage_extracted --log extract.log
-          del %TEMP%\webimage.exe
-          webimage_extracted\bootstrapper.exe -s --action install --components=intel.oneapi.win.ipp.devel:intel.oneapi.win.mkl.devel --eula=accept -p=NEED_VS2019_INTEGRATION=0 -p=NEED_VS2022_INTEGRATION=0 --log-dir=.
-          rd /s/q "webimage_extracted"
       - name: Build benchmark
         env:
           TMP_DIR: ${{ runner.temp }}
         run: |
+          ls "$env:VCPKG_DEFAULT_BINARY_CACHE"
           & 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\Launch-VsDevShell.ps1' -Arch amd64 -HostArch amd64
           cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=$env:TMP_DIR/kfr/kfr-windows-x86_64/lib/cmake;${{ github.workspace }}/vcpkg_installed/x64-windows-static-md/share;C:/Program Files (x86)/Intel/oneAPI/ipp/latest/lib/cmake;C:/Program Files (x86)/Intel/oneAPI/mkl/latest/lib/cmake" -DCMAKE_C_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" -DCMAKE_LINKER="C:/Program Files/LLVM/bin/lld-link.exe"
           ninja -C build

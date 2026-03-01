@@ -23,8 +23,18 @@ elseif (WIN32)
     set(VCPKG_TARGET_TRIPLET "x64-windows-static-md")
     set(VCPKG_HOST_TRIPLET "x64-windows-static-md")
 else ()
-    set(VCPKG_TARGET_TRIPLET "x64-linux")
-    set(VCPKG_HOST_TRIPLET "x64-linux")
+    execute_process(
+        COMMAND uname -m
+        OUTPUT_VARIABLE HOST_ARCH
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    if (HOST_ARCH MATCHES "aarch64|arm64")
+        set(VCPKG_TARGET_TRIPLET "arm64-linux")
+        set(VCPKG_HOST_TRIPLET  "arm64-linux")
+    else()
+        set(VCPKG_TARGET_TRIPLET "x64-linux")
+        set(VCPKG_HOST_TRIPLET  "x64-linux")
+    endif()
 endif ()
 
 set(CMAKE_TOOLCHAIN_FILE
