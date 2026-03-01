@@ -3,19 +3,19 @@ on: push
 jobs:
   linux-x86_64:
     runs-on: ubuntu-24.04
+    env:
+      VCPKG_FEATURE_FLAGS: manifests
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - name: Packages
         run: |
           sudo apt-get update && sudo apt-get install -y wget cmake gnupg2 ninja-build build-essential unzip libx11-dev libxcomposite-dev libxext-dev libasound2-dev libfontconfig1-dev libglu1-mesa-dev mesa-common-dev libcurl4-openssl-dev libomp-dev clang
-      - name: Build Vcpkg dependencies
-        env:
-          VCPKG_TARGET_TRIPLET: x64-linux
-          VCPKG_HOST_TRIPLET: x64-linux
+      - name: Bootstrap local vcpkg
         run: |
-          cd "$VCPKG_INSTALLATION_ROOT"
-          ./vcpkg install fftw3[avx2] sleef[dft] pffft juce[core]
+          ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
       - name: Get KFR7 binaries
         env:
           TMP_DIR: ${{ runner.temp }}
@@ -35,7 +35,7 @@ jobs:
         env:
           TMP_DIR: ${{ runner.temp }}
         run: |
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=${TMP_DIR}/kfr/kfr-linux-x86_64/lib/cmake;$VCPKG_INSTALLATION_ROOT/installed/x64-linux/share;/opt/intel/oneapi/ipp/latest/lib/cmake;/opt/intel/oneapi/mkl/latest/lib/cmake" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=${TMP_DIR}/kfr/kfr-linux-x86_64/lib/cmake;${{ github.workspace }}/vcpkg_installed/x64-linux/share;/opt/intel/oneapi/ipp/latest/lib/cmake;/opt/intel/oneapi/mkl/latest/lib/cmake" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
           ninja -C build
           ls -la build
           file build/fft_benchmark_{fftw,kfr,ipp,mkl,sleef,kissfft,pffft,juce}
@@ -53,23 +53,23 @@ jobs:
           name: vcpkg-buildtrees
           retention-days: 10
           path: |
-            /usr/local/share/vcpkg/buildtrees
+            ${{ github.workspace }}/vcpkg/buildtrees
 
   linux-arm64:
     runs-on: ubuntu-24.04-arm
+    env:
+      VCPKG_FEATURE_FLAGS: manifests
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - name: Packages
         run: |
           sudo apt-get update && sudo apt-get install -y wget cmake gnupg2 ninja-build build-essential unzip libx11-dev libxcomposite-dev libxext-dev libasound2-dev libfontconfig1-dev libglu1-mesa-dev mesa-common-dev libcurl4-openssl-dev libomp-dev clang
-      - name: Build Vcpkg dependencies
-        env:
-          VCPKG_TARGET_TRIPLET: arm64-linux
-          VCPKG_HOST_TRIPLET: arm64-linux
+      - name: Bootstrap local vcpkg
         run: |
-          cd "$VCPKG_INSTALLATION_ROOT"
-          ./vcpkg install fftw3[neon] sleef[dft] pffft juce[core]
+          ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
       - name: Get KFR7 binaries
         env:
           TMP_DIR: ${{ runner.temp }}
@@ -82,7 +82,7 @@ jobs:
         env:
           TMP_DIR: ${{ runner.temp }}
         run: |
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=${TMP_DIR}/kfr/kfr-linux-arm64/lib/cmake;$VCPKG_INSTALLATION_ROOT/installed/arm64-linux/share" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=${TMP_DIR}/kfr/kfr-linux-arm64/lib/cmake;${{ github.workspace }}/vcpkg_installed/arm64-linux/share" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DVCPKG_TARGET_TRIPLET=arm64-linux -DVCPKG_HOST_TRIPLET=arm64-linux
           ninja -C build
           ls -la build
           file build/fft_benchmark_{fftw,kfr,sleef,kissfft,pffft,juce}
@@ -100,23 +100,23 @@ jobs:
           name: vcpkg-buildtrees-arm64
           retention-days: 10
           path: |
-            /usr/local/share/vcpkg/buildtrees
+            ${{ github.workspace }}/vcpkg/buildtrees
 
   macos-arm64:
     runs-on: macos-14
+    env:
+      VCPKG_FEATURE_FLAGS: manifests
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - name: Packages
         run: |
           brew install cmake ninja libomp
-      - name: Build Vcpkg dependencies
-        env:
-          VCPKG_TARGET_TRIPLET: arm64-osx
-          VCPKG_HOST_TRIPLET: arm64-osx
+      - name: Bootstrap local vcpkg
         run: |
-          cd "$VCPKG_INSTALLATION_ROOT"
-          ./vcpkg install fftw3[neon] sleef[dft] pffft juce[core]
+          ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
       - name: Get KFR7 binaries
         env:
           TMP_DIR: ${{ runner.temp }}
@@ -129,7 +129,7 @@ jobs:
         env:
           TMP_DIR: ${{ runner.temp }}
         run: |
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=${TMP_DIR}/kfr/kfr-macos-arm64/lib/cmake;$VCPKG_INSTALLATION_ROOT/installed/arm64-osx/share"
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=${TMP_DIR}/kfr/kfr-macos-arm64/lib/cmake;${{ github.workspace }}/vcpkg_installed/arm64-osx/share"
           ninja -C build
           ls -la build
           file build/fft_benchmark_{fftw,kfr,sleef,kissfft,pffft,juce}
@@ -147,17 +147,20 @@ jobs:
           name: vcpkg-buildtrees-macos-arm64
           retention-days: 10
           path: |
-            /usr/local/share/vcpkg/buildtrees
+            ${{ github.workspace }}/vcpkg/buildtrees
 
   windows-x86_64:
     runs-on: windows-latest
+    env:
+      VCPKG_FEATURE_FLAGS: manifests
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Build Vcpkg dependencies
+        with:
+          submodules: recursive
+      - name: Bootstrap local vcpkg
         run: |
-          cd "$env:VCPKG_INSTALLATION_ROOT"
-          .\vcpkg install --triplet=x64-windows-static-md --host-triplet=x64-windows-static-md fftw3[avx2] sleef[dft] pffft juce[core]
+          .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
       - name: Get KFR7 binaries
         env:
           TMP_DIR: ${{ runner.temp }}
@@ -178,7 +181,7 @@ jobs:
           TMP_DIR: ${{ runner.temp }}
         run: |
           & 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\Launch-VsDevShell.ps1' -Arch amd64 -HostArch amd64
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=$env:TMP_DIR/kfr/kfr-windows-x86_64/lib/cmake;$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows-static-md/share;C:/Program Files (x86)/Intel/oneAPI/ipp/latest/lib/cmake;C:/Program Files (x86)/Intel/oneAPI/mkl/latest/lib/cmake" -DCMAKE_C_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" -DCMAKE_LINKER="C:/Program Files/LLVM/bin/lld-link.exe"
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=$env:TMP_DIR/kfr/kfr-windows-x86_64/lib/cmake;${{ github.workspace }}/vcpkg_installed/x64-windows-static-md/share;C:/Program Files (x86)/Intel/oneAPI/ipp/latest/lib/cmake;C:/Program Files (x86)/Intel/oneAPI/mkl/latest/lib/cmake" -DCMAKE_C_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" -DCMAKE_LINKER="C:/Program Files/LLVM/bin/lld-link.exe"
           ninja -C build
           New-Item -ItemType Directory -Force -Path "${{ github.workspace }}\dist"
           Copy-Item build\fft_benchmark_*.exe "${{ github.workspace }}\dist"
@@ -194,4 +197,4 @@ jobs:
           name: vcpkg-buildtrees-windows
           retention-days: 10
           path: |
-            C:\vcpkg\buildtrees
+            ${{ github.workspace }}\vcpkg\buildtrees
