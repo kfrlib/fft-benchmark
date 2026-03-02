@@ -479,8 +479,12 @@ int main(int argc, char** argv)
     if (progress)
     {
         printf("calibrating tsc...");
+        fflush(stdout);
     }
-    details::calibrate_tsc();
+    {
+        benchmark_scope scope; // run at benchmarking priority/frequency
+        details::calibrate_tsc();
+    }
 
     if (progress)
     {

@@ -5,7 +5,6 @@
  * See LICENSE.txt for details
  */
 #include "benchmark.hpp"
-#include <thread>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -27,19 +26,40 @@ double tsc_scale = 0;
 
 void calibrate_tsc()
 {
-    constexpr int count = 10;
-    double tsc_freq     = 0;
+#if defined(__aarch64__)
+    // On AArch64 the virtual counter CNTVCT_EL0 is driven by a fixed-frequency
+    // oscillator whose rate is published in CNTFRQ_EL0. No measurement loop is
+    // needed — just read the register directly.
+    uint64_t cntfrq;
+    asm volatile("mrs %0, CNTFRQ_EL0" : "=r"(cntfrq));
+    tsc_scale = 1e9 / static_cast<double>(cntfrq); // ns per tick
+#else
+    // On x86, busy-wait against os_time() so the CPU stays at its full running
+    // frequency throughout calibration (sleep_for causes a frequency drop on
+    // wakeup that corrupts the TSC-to-wall-clock ratio).
+    constexpr int count                 = 10;
+    constexpr auto interval             = std::chrono::milliseconds(50);
+    double tsc_freq                     = 0;
     for (int i = 0; i < count; ++i)
     {
+        // Align to a fresh os_time() tick to avoid a partial first interval.
         std::chrono::nanoseconds os_start = os_time();
-        uint64_t tsc_start                = rdtsc();
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        while (os_time() == os_start)
+            ;
+        os_start               = os_time();
+        uint64_t tsc_start     = rdtsc();
+        std::chrono::nanoseconds os_end;
+        do
+        {
+            os_end = os_time();
+        } while (os_end - os_start < interval);
         uint64_t tsc_duration                = rdtsc() - tsc_start;
-        std::chrono::nanoseconds os_duration = os_time() - os_start;
+        std::chrono::nanoseconds os_duration = os_end - os_start;
         tsc_freq += tsc_duration / static_cast<double>(os_duration.count());
     }
     tsc_freq /= count; // ticks/ns
     tsc_scale = 1.0 / tsc_freq;
+#endif
 }
 
 #ifdef _WIN32
