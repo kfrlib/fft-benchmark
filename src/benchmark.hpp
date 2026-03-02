@@ -344,8 +344,6 @@ public:
     virtual ~fft_impl() {}
     virtual void execute(real* out, const real* in) = 0;
 
-    virtual bool performs_scaling() const { return false; }
-
     constexpr static bool valid = true;
 };
 
