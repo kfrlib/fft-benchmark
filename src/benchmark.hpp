@@ -170,22 +170,33 @@ namespace details
 inline uint64_t rdtsc()
 {
 #if defined(__x86_64__) || defined(_M_X64)
+    // lfence: execution serialization — drains the out-of-order engine so that
+    // all prior instructions retire before RDTSC, and RDTSC completes before
+    // any subsequent instruction starts.
     _mm_lfence();
+#elif defined(__aarch64__)
+    // isb: instruction synchronization barrier — flushes the pipeline so that
+    // all prior instructions are complete before the counter is read.
+    // dmb (what atomic_thread_fence emits) only orders *memory* accesses and
+    // does not prevent the CPU from speculating across it.
+    asm volatile("isb" ::: "memory");
 #else
     std::atomic_thread_fence(std::memory_order_seq_cst);
 #endif
-#ifdef __clang__
-#ifdef __aarch64__
+
+#if defined(__aarch64__)
     uint64_t tsc;
-    asm volatile("mrs %0, CNTVCT_EL0" : "=r"(tsc):);
-#else
+    asm volatile("mrs %0, CNTVCT_EL0" : "=r"(tsc));
+#elif defined(__clang__)
     uint64_t tsc = __builtin_readcyclecounter();
-#endif
 #else
     uint64_t tsc = __rdtsc();
 #endif
+
 #if defined(__x86_64__) || defined(_M_X64)
     _mm_lfence();
+#elif defined(__aarch64__)
+    asm volatile("isb" ::: "memory");
 #else
     std::atomic_thread_fence(std::memory_order_seq_cst);
 #endif
@@ -222,15 +233,13 @@ inline std::chrono::nanoseconds bench_stop()
 
 inline void bench_start()
 {
-    details::full_barrier();
+    // rdtsc() already contains lfence;read;lfence — no extra barriers needed.
     details::start_time = tsc_time();
-    details::full_barrier();
 }
 inline std::chrono::nanoseconds bench_stop()
 {
-    details::full_barrier();
+    // rdtsc() already contains lfence;read;lfence — no extra barriers needed.
     std::chrono::nanoseconds stop_time = tsc_time();
-    details::full_barrier();
     return stop_time - details::start_time;
 }
 #endif
