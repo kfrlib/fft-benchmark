@@ -44,6 +44,21 @@ inline T* aligned_malloc(size_t size, size_t alignment = 64)
 }
 inline void aligned_free(void* aligned_ptr) { free(((void**)aligned_ptr)[-1]); }
 
+template <typename T>
+struct aligned_allocator
+{
+    using value_type = T;
+    aligned_allocator() noexcept {}
+    template <typename U>
+    aligned_allocator(const aligned_allocator<U>&) noexcept
+    {
+    }
+    T* allocate(size_t n) { return aligned_malloc<T>(n); }
+    void deallocate(T* p, size_t) { aligned_free(p); }
+    bool operator==(const aligned_allocator&) const { return true; }
+    bool operator!=(const aligned_allocator&) const { return false; }
+};
+
 void use_from_outside(const char volatile*);
 
 inline void dont_optimize(const void* in)

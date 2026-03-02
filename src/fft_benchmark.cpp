@@ -67,8 +67,8 @@ struct benchmark_runner
         return maxerr;
     }
 
-    static void maybe_rescale_inverse(std::vector<real>& data, size_t out_size, size_t size, bool inverse,
-                                      double& err, const double* refout)
+    static void maybe_rescale_inverse(std::vector<real, aligned_allocator<real>>& data, size_t out_size,
+                                      size_t size, bool inverse, double& err, const double* refout)
     {
         if (err > 1e-4 && inverse)
         {
@@ -97,7 +97,7 @@ struct benchmark_runner
         double err, maxerr = 0;
         if constexpr (inplace)
         {
-            std::vector<real> inout(std::max(in_size, out_size));
+            std::vector<real, aligned_allocator<real>> inout(std::max(in_size, out_size));
             inout.reserve(size * 2 + 2); // For safety
             std::copy(refin, refin + in_size, inout.data());
             fft->execute(inout.data(), inout.data());
@@ -107,8 +107,8 @@ struct benchmark_runner
         }
         else
         {
-            std::vector<real> in(in_size);
-            std::vector<real> out(out_size);
+            std::vector<real, aligned_allocator<real>> in(in_size);
+            std::vector<real, aligned_allocator<real>> out(out_size);
             in.reserve(size * 2 + 2); // For safety
             out.reserve(size * 2 + 2); // For safety
             std::copy(refin, refin + in_size, in.data());
