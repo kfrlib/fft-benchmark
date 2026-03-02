@@ -14,6 +14,9 @@
 #include <pthread.h>
 #include <sched.h>
 #endif
+#ifdef __APPLE__
+#include <pthread.h>
+#endif
 
 namespace details
 {
@@ -64,6 +67,10 @@ static DWORD_PTR old_affmask;
 #ifdef __linux__
 static cpu_set_t old_cpuset;
 #endif
+#ifdef __APPLE__
+static qos_class_t old_qos_class;
+static int old_qos_relative_priority;
+#endif
 
 static int ideal_core = 0;
 void run_on_core(int core) { ideal_core = core; }
@@ -83,6 +90,12 @@ benchmark_scope::benchmark_scope()
     CPU_SET(ideal_core, &cpuset);
     sched_setaffinity(0, sizeof(cpuset), &cpuset);
 #endif
+#ifdef __APPLE__
+    // CPU affinity is not user-controllable on macOS/Apple Silicon.
+    // Boost thread QoS to USER_INTERACTIVE to reduce scheduling preemptions.
+    pthread_get_qos_class_np(pthread_self(), &old_qos_class, &old_qos_relative_priority);
+    pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
+#endif
 }
 benchmark_scope::~benchmark_scope()
 {
@@ -94,5 +107,8 @@ benchmark_scope::~benchmark_scope()
 #endif
 #ifdef __linux__
     sched_setaffinity(0, sizeof(old_cpuset), &old_cpuset);
+#endif
+#ifdef __APPLE__
+    pthread_set_qos_class_self_np(old_qos_class, old_qos_relative_priority);
 #endif
 }

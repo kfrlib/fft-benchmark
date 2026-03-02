@@ -56,7 +56,7 @@ static double rms(const real* a, const double* ref, size_t size)
 template <typename real>
 struct benchmark_runner
 {
-    constexpr static int preheat_calls = 1;
+    constexpr static int preheat_calls = 5;
     constexpr static int calls_per_run = 10;
 
     static double compute_max_error(const real* data, const double* refout, size_t out_size)
@@ -213,32 +213,35 @@ struct benchmark_runner
         std::chrono::nanoseconds total_duration(0);
         uint64_t total_calls = 0;
 
-        for (;;)
         {
-            for (int i = 0; i < preheat_calls; ++i)
+            benchmark_scope scope;
+            for (;;)
             {
-                fft->execute(out, inplace ? out : in);
-                dont_optimize(out);
-            }
-            bench_start();
-            for (int i = 0; i < calls_per_run; ++i)
-            {
-                fft->execute(out, inplace ? out : in);
-                dont_optimize(out);
-            }
-            auto run_duration = bench_stop();
-            total_duration += run_duration;
-            minimum_duration = std::min(minimum_duration, run_duration);
-            total_calls += calls_per_run;
+                for (int i = 0; i < preheat_calls; ++i)
+                {
+                    fft->execute(out, inplace ? out : in);
+                    dont_optimize(out);
+                }
+                bench_start();
+                for (int i = 0; i < calls_per_run; ++i)
+                {
+                    fft->execute(out, inplace ? out : in);
+                    dont_optimize(out);
+                }
+                auto run_duration = bench_stop();
+                total_duration += run_duration;
+                minimum_duration = std::min(minimum_duration, run_duration);
+                total_calls += calls_per_run;
 
-            fill_random(in, size * 2);
-            if (inplace)
-                std::copy(in, in + size * 2, out);
+                fill_random(in, size * 2);
+                if (inplace)
+                    std::copy(in, in + size * 2, out);
 
-            if ((total_duration >= std::chrono::milliseconds(benchmark_duration) && total_calls >= 50) ||
-                total_calls >= 1000'000)
-                break;
-        }
+                if ((total_duration >= std::chrono::milliseconds(benchmark_duration) && total_calls >= 50) ||
+                    total_calls >= 1000'000)
+                    break;
+            }
+        } // benchmark_scope
 
         [[maybe_unused]] double average_time =
             std::chrono::duration<double>(total_duration).count() / total_calls;
@@ -248,8 +251,10 @@ struct benchmark_runner
         [[maybe_unused]] double opspersecond_best = 1.0 / minimum_time;
 
         double time_value = minimum_time;
+        // FFTW convention: complex FFT costs 5*N*log2(N) FLOP, real FFT half that.
         const double mflops =
-            (5.0 * size * std::log((double)size) / (std::log(2.0) * time_value)) / 1000'000.0;
+            ((is_complex ? 5.0 : 2.5) * size * std::log((double)size) / (std::log(2.0) * time_value)) /
+            1000'000.0;
 
         if (progress)
         {
