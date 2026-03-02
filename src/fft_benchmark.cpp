@@ -212,6 +212,7 @@ struct benchmark_runner
         std::chrono::nanoseconds minimum_duration(std::chrono::seconds(1000));
         std::chrono::nanoseconds total_duration(0);
         uint64_t total_calls = 0;
+        std::vector<double> batch_times; // per-call time (seconds) for each batch
 
         {
             benchmark_scope scope;
@@ -232,6 +233,8 @@ struct benchmark_runner
                 total_duration += run_duration;
                 minimum_duration = std::min(minimum_duration, run_duration);
                 total_calls += calls_per_run;
+                batch_times.push_back(
+                    std::chrono::duration<double>(run_duration).count() / calls_per_run);
 
                 fill_random(in, size * 2);
                 if (inplace)
@@ -243,12 +246,11 @@ struct benchmark_runner
             }
         } // benchmark_scope
 
-        [[maybe_unused]] double average_time =
-            std::chrono::duration<double>(total_duration).count() / total_calls;
+        [[maybe_unused]] double median_time  = get_median(batch_times);
         [[maybe_unused]] double minimum_time =
             std::chrono::duration<double>(minimum_duration).count() / calls_per_run;
-        [[maybe_unused]] double opspersecond_avg  = 1.0 / average_time;
-        [[maybe_unused]] double opspersecond_best = 1.0 / minimum_time;
+        [[maybe_unused]] double opspersecond_median = 1.0 / median_time;
+        [[maybe_unused]] double opspersecond_best   = 1.0 / minimum_time;
 
         double time_value = minimum_time;
         // FFTW convention: complex FFT costs 5*N*log2(N) FLOP, real FFT half that.
@@ -261,15 +263,15 @@ struct benchmark_runner
             printf("%-6s %-7s %-9s %-10s %11s %12.2f | %12.2fus%12.2f | %12.2fus%12.2f | %7" PRIu64 "\n",
                    type_name<real>, is_complex_str(is_complex), inverse_str(inverse), inplace_str(inplace),
                    sizes_to_string(sizes).c_str(), mflops, minimum_time * 1'000'000, opspersecond_best,
-                   average_time * 1'000'000, opspersecond_avg, total_calls);
+                   median_time * 1'000'000, opspersecond_median, total_calls);
         }
 
         json_key("mflops");
         json_number(mflops);
         json_key("best_time");
         json_number(minimum_time * 1'000'000);
-        json_key("avg_time");
-        json_number(average_time * 1'000'000);
+        json_key("median_time");
+        json_number(median_time * 1'000'000);
         json_close_object();
 
         if (progress)
@@ -497,7 +499,7 @@ int main(int argc, char** argv)
     {
 
         printf("%-6s %-7s %-9s %-10s %11s %12s | %14s%12s | %14s%12s | %7s\n", "data", "type", "direction",
-               "buffer", "size", "mflops", "best time", "(ops/sec)", "avg. time", "(ops/sec)", "calls");
+               "buffer", "size", "mflops", "best time", "(ops/sec)", "med. time", "(ops/sec)", "calls");
     }
 
     json_key("cpu");
