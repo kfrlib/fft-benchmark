@@ -1,6 +1,9 @@
-find_package(KFR CONFIG)
-if (KFR_FOUND)
-    message(STATUS "KFR ${KFR_VERSION} is found. Enabling KFR")
+
+if (KFR_DIR)
+    set(KFR_ENABLE_MULTIARCH FALSE CACHE BOOL "" FORCE)
+    add_subdirectory(${KFR_DIR} kfr)
+
+    message(STATUS "KFR_DIR is set. Enabling KFR")
 
     add_fft(
         kfr
@@ -9,14 +12,12 @@ if (KFR_FOUND)
         LIBRARIES
         kfr
         kfr_dft)
+
 else ()
     
-    if (KFR_DIR)
-        set(KFR_ARCH avx2 CACHE STRING "" FORCE)
-        set(KFR_ENABLE_MULTIARCH FALSE CACHE BOOL "" FORCE)
-        add_subdirectory(${KFR_DIR} kfr)
-
-        message(STATUS "KFR_DIR is set. Enabling KFR")
+    find_package(KFR CONFIG)
+    if (KFR_FOUND)
+        message(STATUS "KFR ${KFR_VERSION} is found. Enabling KFR")
 
         add_fft(
             kfr
@@ -25,8 +26,7 @@ else ()
             LIBRARIES
             kfr
             kfr_dft)
-
-    else ()
+    else ()    
         message(STATUS "KFR is not found. Disabling KFR Add <KFR_ROOT>/lib/cmake to CMAKE_PREFIX_PATH")
     endif ()
 endif ()
