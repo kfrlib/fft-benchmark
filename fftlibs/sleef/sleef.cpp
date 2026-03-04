@@ -5,7 +5,7 @@
  * See LICENSE.txt for details
  */
 
-#include "benchmark.hpp"
+#include "fft_benchmark.hpp"
 #include <memory>
 
 #define SLEEF_STATIC_LIBS

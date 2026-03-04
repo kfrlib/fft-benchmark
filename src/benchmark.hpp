@@ -20,12 +20,13 @@
 #endif
 #include <array>
 #include <charconv>
-#include <memory>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
+
 #if defined(__x86_64__) || defined(_M_X64)
 #if __has_include(<cpuid.h>)
 #include <cpuid.h>
@@ -304,30 +305,40 @@ constexpr inline const char* type_name = "float";
 template <>
 constexpr inline const char* type_name<double> = "double";
 
-constexpr inline const char* is_complex_str(bool is_complex)
-{
-    if (is_complex)
-        return "complex";
-    else
-        return "real";
-}
-constexpr inline const char* inverse_str(bool inverse)
-{
-    if (inverse)
-        return "inverse";
-    else
-        return "forward";
-}
-constexpr inline const char* inplace_str(bool inplace)
-{
-    if (inplace)
-        return "inplace";
-    else
-        return "outofplace";
-}
-
 template <size_t dims>
 using sizes_t = std::array<size_t, dims>;
+
+template <typename real>
+void fill_random(real* in, size_t size)
+{
+    for (size_t i = 0; i < size; i++)
+        in[i] = static_cast<real>(((double)rand() / RAND_MAX) * 2.0 - 1.0);
+}
+
+template <typename real>
+static double rms(const real* a, const double* ref, size_t size)
+{
+    double sum = 0;
+    for (size_t i = 0; i < size; i++)
+    {
+        double diff = a[i] - ref[i];
+        sum += diff * diff;
+    }
+    return std::sqrt(sum / size);
+}
+
+inline size_t parse_number(std::string_view& s)
+{
+    size_t n = s.find_first_not_of("0123456789");
+    if (n == 0)
+        return 0;
+    if (n == std::string_view::npos)
+        n = s.size();
+    size_t result;
+    std::from_chars(s.data(), s.data() + n, result);
+    s = s.substr(n);
+    return result;
+}
 
 inline size_t product(std::vector<size_t> sizes)
 {
@@ -352,99 +363,50 @@ inline std::string sizes_to_string(std::vector<size_t> sizes)
     return result;
 }
 
-template <typename real>
-class fft_impl
+inline std::vector<size_t> parse_size(std::string_view s)
 {
-public:
-    virtual ~fft_impl() {}
-    virtual void execute(real* out, const real* in) = 0;
-
-    constexpr static bool valid = true;
-};
-
-class fft_impl_stub
-{
-public:
-    constexpr static bool valid = false;
-};
-
-template <typename real>
-using fft_impl_ptr = std::unique_ptr<fft_impl<real>>;
-
-// Forward declarations
-template <typename real>
-fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, bool is_complex, bool inverse, bool inplace);
-
-template <template <int, typename, bool, bool, bool> typename fft_implementation, typename real, size_t dims,
-          bool is_complex, bool invert, bool inplace>
-fft_impl_ptr<real> fft_create_for(const sizes_t<dims>& size, std::integral_constant<bool, is_complex>,
-                                  std::integral_constant<bool, invert>, std::integral_constant<bool, inplace>)
-{
-    if constexpr (fft_implementation<dims, real, is_complex, invert, inplace>::valid)
+    std::vector<size_t> result;
+    if (s.empty())
+        return result;
+    while (size_t n = parse_number(s))
     {
-        return fft_impl_ptr<real>(new fft_implementation<dims, real, is_complex, invert, inplace>(size));
+        result.push_back(n);
+        if (s.empty())
+            return result;
+        if (s[0] == 'x')
+            s = s.substr(1);
+        else
+            return {};
     }
-    return nullptr;
+    return result;
 }
 
-template <template <int, typename, bool, bool, bool> typename fft_implementation, typename real, size_t dims,
-          bool is_complex, bool invert>
-fft_impl_ptr<real> fft_create_for(const sizes_t<dims>& size, std::integral_constant<bool, is_complex>,
-                                  std::integral_constant<bool, invert>, bool inplace)
+inline std::vector<bool> to_vector_bool(std::string_view s)
 {
-    if (inplace)
-        return fft_create_for<fft_implementation, real>(size, std::integral_constant<bool, is_complex>{},
-                                                        std::integral_constant<bool, invert>{},
-                                                        std::integral_constant<bool, true>{});
-    else
-        return fft_create_for<fft_implementation, real>(size, std::integral_constant<bool, is_complex>{},
-                                                        std::integral_constant<bool, invert>{},
-                                                        std::integral_constant<bool, false>{});
+    using namespace std::string_view_literals;
+
+    std::vector<bool> result;
+    for (char c : s)
+    {
+        if ("yY1"sv.find_first_of(c) != std::string_view::npos)
+        {
+            result.push_back(true);
+        }
+        else if ("nN0"sv.find_first_of(c) != std::string_view::npos)
+        {
+            result.push_back(false);
+        }
+    }
+    return result;
 }
 
-template <template <int, typename, bool, bool, bool> typename fft_implementation, typename real, size_t dims,
-          bool is_complex>
-fft_impl_ptr<real> fft_create_for(const sizes_t<dims>& size, std::integral_constant<bool, is_complex>,
-                                  bool invert, bool inplace)
+inline std::string execfile(std::string command)
 {
-    if (invert)
-        return fft_create_for<fft_implementation, real>(size, std::integral_constant<bool, is_complex>{},
-                                                        std::integral_constant<bool, true>{}, inplace);
-    else
-        return fft_create_for<fft_implementation, real>(size, std::integral_constant<bool, is_complex>{},
-                                                        std::integral_constant<bool, false>{}, inplace);
+    size_t pos = command.find_last_of("/\\");
+    command    = command.substr(pos == std::string::npos ? 0 : pos + 1);
+    if (command.substr(command.size() - 4) == ".exe")
+        command = command.substr(0, command.size() - 4);
+    return command;
 }
-
-template <template <int, typename, bool, bool, bool> typename fft_implementation, typename real, size_t dims>
-fft_impl_ptr<real> fft_create_for(const sizes_t<dims>& size, bool is_complex, bool invert, bool inplace)
-{
-    if (is_complex)
-        return fft_create_for<fft_implementation, real>(size, std::integral_constant<bool, true>{}, invert,
-                                                        inplace);
-    else
-        return fft_create_for<fft_implementation, real>(size, std::integral_constant<bool, false>{}, invert,
-                                                        inplace);
-}
-
-template <template <int, typename, bool, bool, bool> typename fft_implementation, typename real>
-fft_impl_ptr<real> fft_create_for(const std::vector<size_t>& size, bool is_complex, bool invert, bool inplace)
-{
-    if (size.size() == 1)
-        return fft_create_for<fft_implementation, real>(sizes_t<1>{ size[0] }, is_complex, invert, inplace);
-    if (size.size() == 2)
-        return fft_create_for<fft_implementation, real>(sizes_t<2>{ size[0], size[1] }, is_complex, invert,
-                                                        inplace);
-    if (size.size() == 3)
-        return fft_create_for<fft_implementation, real>(sizes_t<3>{ size[0], size[1], size[2] }, is_complex,
-                                                        invert, inplace);
-    return nullptr;
-}
-
-extern template fft_impl_ptr<float> fft_create<float>(const std::vector<size_t>& size, bool is_complex,
-                                                      bool inverse, bool inplace);
-extern template fft_impl_ptr<double> fft_create<double>(const std::vector<size_t>& size, bool is_complex,
-                                                        bool inverse, bool inplace);
-
-std::string fft_name();
 
 extern bool avx2only;

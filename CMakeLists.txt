@@ -26,15 +26,14 @@ else ()
     execute_process(
         COMMAND uname -m
         OUTPUT_VARIABLE HOST_ARCH
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-    )
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
     if (HOST_ARCH MATCHES "aarch64|arm64")
         set(VCPKG_TARGET_TRIPLET "arm64-linux")
-        set(VCPKG_HOST_TRIPLET  "arm64-linux")
-    else()
+        set(VCPKG_HOST_TRIPLET "arm64-linux")
+    else ()
         set(VCPKG_TARGET_TRIPLET "x64-linux")
-        set(VCPKG_HOST_TRIPLET  "x64-linux")
-    endif()
+        set(VCPKG_HOST_TRIPLET "x64-linux")
+    endif ()
 endif ()
 
 set(CMAKE_TOOLCHAIN_FILE
@@ -58,12 +57,28 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set(COMMON_INCLUDES ${CMAKE_CURRENT_LIST_DIR}/src)
 
 set(COMMON_SRCS ${CMAKE_CURRENT_LIST_DIR}/src/fft_benchmark.cpp ${CMAKE_CURRENT_LIST_DIR}/src/benchmark.hpp
-                ${CMAKE_CURRENT_LIST_DIR}/src/benchmark.cpp ${CMAKE_CURRENT_LIST_DIR}/src/utils.cpp
-                ${CMAKE_CURRENT_LIST_DIR}/src/vectors.c)
+                ${CMAKE_CURRENT_LIST_DIR}/src/benchmark.cpp ${CMAKE_CURRENT_LIST_DIR}/src/fft_vectors.c)
 
 enable_testing()
 
-set(SIZES 16 32 64 128 256 512 1024 2048 4096 8192 16384 32768 65536 131072 262144 524288 1048576)
+set(SIZES
+    16
+    32
+    64
+    128
+    256
+    512
+    1024
+    2048
+    4096
+    8192
+    16384
+    32768
+    65536
+    131072
+    262144
+    524288
+    1048576)
 
 function (add_fft NAME)
     cmake_parse_arguments(LIB "" "" "SOURCES;LIBRARIES;INCLUDES;DEFINITIONS" ${ARGN})

@@ -5,7 +5,7 @@
  * See LICENSE.txt for details
  */
 
-#include "benchmark.hpp"
+#include "fft_benchmark.hpp"
 #include <array>
 #include <fftw3.h>
 #include <memory>

@@ -6,7 +6,7 @@
  */
 
 #include "ipp.h"
-#include "benchmark.hpp"
+#include "fft_benchmark.hpp"
 #if __has_include("ipp/ipps.h")
 #include "ipp/ipps.h"
 #else

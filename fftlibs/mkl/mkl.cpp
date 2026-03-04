@@ -1,5 +1,5 @@
 
-#include "benchmark.hpp"
+#include "fft_benchmark.hpp"
 
 #include <mkl.h>
 #include <mkl_dfti.h>

@@ -6,7 +6,7 @@
  */
 
 #include "../kissfft.hh"
-#include "benchmark.hpp"
+#include "fft_benchmark.hpp"
 #include <complex>
 #include <cstring>
 #include <memory>

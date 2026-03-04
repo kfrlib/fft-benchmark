@@ -17,6 +17,8 @@
 #include <pthread.h>
 #endif
 
+void use_from_outside(const char volatile* in) { (void)in; }
+
 namespace details
 {
 
@@ -37,17 +39,17 @@ void calibrate_tsc()
     // On x86, busy-wait against os_time() so the CPU stays at its full running
     // frequency throughout calibration (sleep_for causes a frequency drop on
     // wakeup that corrupts the TSC-to-wall-clock ratio).
-    constexpr int count                 = 10;
-    constexpr auto interval             = std::chrono::milliseconds(50);
-    double tsc_freq                     = 0;
+    constexpr int count     = 10;
+    constexpr auto interval = std::chrono::milliseconds(50);
+    double tsc_freq         = 0;
     for (int i = 0; i < count; ++i)
     {
         // Align to a fresh os_time() tick to avoid a partial first interval.
         std::chrono::nanoseconds os_start = os_time();
         while (os_time() == os_start)
             ;
-        os_start               = os_time();
-        uint64_t tsc_start     = rdtsc();
+        os_start           = os_time();
+        uint64_t tsc_start = rdtsc();
         std::chrono::nanoseconds os_end;
         do
         {

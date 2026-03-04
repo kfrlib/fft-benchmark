@@ -1,9 +1,9 @@
 
-if (KFR_DIR)
+if (KFR_SRC_DIR)
     set(KFR_ENABLE_MULTIARCH FALSE CACHE BOOL "" FORCE)
-    add_subdirectory(${KFR_DIR} kfr)
+    add_subdirectory(${KFR_SRC_DIR} kfr)
 
-    message(STATUS "KFR_DIR is set. Enabling KFR")
+    message(STATUS "KFR_SRC_DIR is set. Enabling KFR")
 
     add_fft(
         kfr

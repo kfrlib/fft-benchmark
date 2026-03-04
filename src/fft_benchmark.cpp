@@ -10,7 +10,7 @@
 #include <cstring>
 #include <inttypes.h>
 
-#include "benchmark.hpp"
+#include "fft_benchmark.hpp"
 #include <cmath>
 #include <numeric>
 #include <string>
@@ -34,27 +34,30 @@ extern "C" const double dft_testvector_real_output62[];
 extern "C" const double dft_testvector_real_input64[];
 extern "C" const double dft_testvector_real_output64[];
 
-template <typename real>
-void fill_random(real* in, size_t size)
+constexpr inline const char* is_complex_str(bool is_complex)
 {
-    for (size_t i = 0; i < size; i++)
-        in[i] = static_cast<real>(((double)rand() / RAND_MAX) * 2.0 - 1.0);
+    if (is_complex)
+        return "complex";
+    else
+        return "real";
+}
+constexpr inline const char* inverse_str(bool inverse)
+{
+    if (inverse)
+        return "inverse";
+    else
+        return "forward";
+}
+constexpr inline const char* inplace_str(bool inplace)
+{
+    if (inplace)
+        return "inplace";
+    else
+        return "outofplace";
 }
 
 template <typename real>
-static double rms(const real* a, const double* ref, size_t size)
-{
-    double sum = 0;
-    for (size_t i = 0; i < size; i++)
-    {
-        double diff = a[i] - ref[i];
-        sum += diff * diff;
-    }
-    return std::sqrt(sum / size);
-}
-
-template <typename real>
-struct benchmark_runner
+struct fft_benchmark_runner
 {
     constexpr static int preheat_calls = 5;
     constexpr static int calls_per_run = 10;
@@ -233,8 +236,7 @@ struct benchmark_runner
                 total_duration += run_duration;
                 minimum_duration = std::min(minimum_duration, run_duration);
                 total_calls += calls_per_run;
-                batch_times.push_back(
-                    std::chrono::duration<double>(run_duration).count() / calls_per_run);
+                batch_times.push_back(std::chrono::duration<double>(run_duration).count() / calls_per_run);
 
                 fill_random(in, size * 2);
                 if (inplace)
@@ -246,7 +248,7 @@ struct benchmark_runner
             }
         } // benchmark_scope
 
-        [[maybe_unused]] double median_time  = get_median(batch_times);
+        [[maybe_unused]] double median_time = get_median(batch_times);
         [[maybe_unused]] double minimum_time =
             std::chrono::duration<double>(minimum_duration).count() / calls_per_run;
         [[maybe_unused]] double opspersecond_median = 1.0 / median_time;
@@ -283,15 +285,6 @@ struct benchmark_runner
     }
 };
 
-std::string execfile(std::string command)
-{
-    size_t pos = command.find_last_of("/\\");
-    command    = command.substr(pos == std::string::npos ? 0 : pos + 1);
-    if (command.substr(command.size() - 4) == ".exe")
-        command = command.substr(0, command.size() - 4);
-    return command;
-}
-
 static std::string outname;
 static bool progress = true;
 static bool banner   = true;
@@ -302,37 +295,6 @@ static std::vector<bool> is_complex_list{ true, false };
 static std::vector<bool> inverse_list{ false, true };
 static std::vector<bool> inplace_list{ false, true };
 
-static size_t parse_number(std::string_view& s)
-{
-    size_t n = s.find_first_not_of("0123456789");
-    if (n == 0)
-        return 0;
-    if (n == std::string_view::npos)
-        n = s.size();
-    size_t result;
-    std::from_chars(s.data(), s.data() + n, result);
-    s = s.substr(n);
-    return result;
-}
-
-static std::vector<size_t> parse_size(std::string_view s)
-{
-    std::vector<size_t> result;
-    if (s.empty())
-        return result;
-    while (size_t n = parse_number(s))
-    {
-        result.push_back(n);
-        if (s.empty())
-            return result;
-        if (s[0] == 'x')
-            s = s.substr(1);
-        else
-            return {};
-    }
-    return result;
-}
-
 template <typename real>
 static void run_t(const std::vector<size_t>& sizes, bool progress)
 {
@@ -342,7 +304,7 @@ static void run_t(const std::vector<size_t>& sizes, bool progress)
         {
             for (bool inplace : inplace_list)
             {
-                benchmark_runner<real>::benchmark(sizes, complex, inverse, inplace, progress);
+                fft_benchmark_runner<real>::benchmark(sizes, complex, inverse, inplace, progress);
             }
         }
     }
@@ -354,27 +316,10 @@ static void run(const std::vector<size_t>& sizes, bool progress)
     run_t<double>(sizes, progress);
 }
 
-using namespace std::string_view_literals;
-
-static std::vector<bool> to_vector_bool(std::string_view s)
-{
-    std::vector<bool> result;
-    for (char c : s)
-    {
-        if ("yY1"sv.find_first_of(c) != std::string_view::npos)
-        {
-            result.push_back(true);
-        }
-        else if ("nN0"sv.find_first_of(c) != std::string_view::npos)
-        {
-            result.push_back(false);
-        }
-    }
-    return result;
-}
-
 int main(int argc, char** argv)
 {
+    using namespace std::string_view_literals;
+
     for (size_t i = 1; i < argc; i++)
     {
         if (argv[i] == "--save"sv)
@@ -515,8 +460,8 @@ int main(int argc, char** argv)
     {
         json_key("accuracy");
         json_open_array();
-        benchmark_runner<float>::accuracy_tests(progress);
-        benchmark_runner<double>::accuracy_tests(progress);
+        fft_benchmark_runner<float>::accuracy_tests(progress);
+        fft_benchmark_runner<double>::accuracy_tests(progress);
         json_close_array();
     }
 

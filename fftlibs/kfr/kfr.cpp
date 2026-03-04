@@ -5,7 +5,7 @@
  * See LICENSE.txt for details
  */
 
-#include "benchmark.hpp"
+#include "fft_benchmark.hpp"
 #include "kfr/dft/fft.hpp"
 #include "kfr/version.hpp"
 #include <string>

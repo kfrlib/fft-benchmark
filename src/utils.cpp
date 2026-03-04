@@ -1,1 +1,0 @@
-void use_from_outside(const char volatile* in) { (void)in; }
