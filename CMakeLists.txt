@@ -80,7 +80,7 @@ set(SIZES
     524288
     1048576)
 
-function (add_fft NAME)
+function (add_benchmark NAME)
     cmake_parse_arguments(LIB "" "" "SOURCES;LIBRARIES;INCLUDES;DEFINITIONS" ${ARGN})
 
     add_executable(fft_benchmark_${NAME} ${COMMON_SRCS} ${LIB_SOURCES})

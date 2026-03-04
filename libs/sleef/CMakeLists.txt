@@ -9,7 +9,7 @@ find_package(sleef CONFIG)
 if (TARGET sleef::sleef)
     message(STATUS "Sleef ${sleef_VERSION} is found. Enabling Sleef")
 
-    add_fft(
+    add_benchmark(
         sleef
         SOURCES
         ${CMAKE_CURRENT_LIST_DIR}/sleef.cpp

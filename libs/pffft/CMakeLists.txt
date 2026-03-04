@@ -3,7 +3,7 @@ find_package(pffft CONFIG)
 if (TARGET pffft::pffft)
     message(STATUS "PFFFT is found. Enabling PFFFT")
 
-    add_fft(
+    add_benchmark(
         pffft
         SOURCES
         ${CMAKE_CURRENT_LIST_DIR}/pffft.cpp
