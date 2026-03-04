@@ -5,7 +5,7 @@
  * See LICENSE.txt for details
  */
 
-#include "../kissfft.hh"
+#include "kissfft.hh"
 #include "fft_benchmark.hpp"
 #include <complex>
 #include <cstring>
