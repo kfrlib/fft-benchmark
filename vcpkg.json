@@ -27,6 +27,12 @@
         {
             "name": "juce",
             "default-features": false
+        },
+        {
+            "name": "soxr"
+        },
+        {
+            "name": "libsamplerate"
         }
     ]
 }
