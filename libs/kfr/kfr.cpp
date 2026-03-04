@@ -1,18 +1,21 @@
 /**
  * FFT bencmarking tool (http://kfrlib.com)
- * Copyright (C) 2016-2026 Dan Cazarin
+ * Copyright (C) 2016-2026 Dan Casarin
  * Benchmark source code is MIT-licensed
  * See LICENSE.txt for details
  */
 
 #include "fft_benchmark.hpp"
 #include "kfr/dft/fft.hpp"
+#include "kfr/dsp/sample_rate_conversion.hpp"
 #include "kfr/version.hpp"
+#include "src_benchmark.hpp"
 #include <string>
 
 namespace kfr
 {
 const char* library_version_dft();
+const char* library_version_dsp();
 } // namespace kfr
 
 std::string fft_name()
@@ -141,3 +144,45 @@ fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, bool is_complex, 
 
 template std::unique_ptr<fft_impl<float>> fft_create<float>(const std::vector<size_t>&, bool, bool, bool);
 template std::unique_ptr<fft_impl<double>> fft_create<double>(const std::vector<size_t>&, bool, bool, bool);
+
+std::string src_name()
+{
+#if defined(__x86_64__) || defined(_M_X64)
+    if (avx2only)
+    {
+        fprintf(stderr, "KFR: enabling AVX2\n");
+        kfr::override_cpu(kfr::cpu_t::avx2);
+    }
+#endif
+    return std::string(kfr::library_version_dsp());
+}
+
+template <typename real>
+struct src_implementation : public src_impl<real>
+{
+    src_implementation(unsigned out_rate, unsigned in_rate, unsigned seconds)
+    {
+        out_length = out_rate * seconds;
+        in_length  = in_rate * seconds;
+        converter.reset(new kfr::samplerate_converter<real>(kfr::sample_rate_conversion_quality::high,
+                                                            out_rate, in_rate));
+    }
+    void execute(real* out, const real* in) final
+    {
+        std::ignore = converter->process(kfr::make_univector(out, out_length).ref(),
+                                         kfr::make_univector(in, in_length));
+    }
+
+    std::unique_ptr<kfr::samplerate_converter<real>> converter;
+    size_t out_length;
+    size_t in_length;
+};
+
+template <typename real>
+src_impl_ptr<real> src_create(unsigned out_rate, unsigned in_rate, unsigned seconds)
+{
+    return src_impl_ptr<real>(new src_implementation<real>(out_rate, in_rate, seconds));
+}
+
+template std::unique_ptr<src_impl<float>> src_create<float>(unsigned, unsigned, unsigned);
+template std::unique_ptr<src_impl<double>> src_create<double>(unsigned, unsigned, unsigned);

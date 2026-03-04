@@ -11,6 +11,7 @@ if (TARGET sleef::sleef)
 
     add_benchmark(
         sleef
+        FFT
         SOURCES
         ${CMAKE_CURRENT_LIST_DIR}/sleef.cpp
         DEFINITIONS

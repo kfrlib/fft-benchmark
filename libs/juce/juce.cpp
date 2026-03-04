@@ -1,6 +1,6 @@
 /**
  * FFT bencmarking tool (http://kfrlib.com)
- * Copyright (C) 2016-2026 Dan Cazarin
+ * Copyright (C) 2016-2026 Dan Casarin
  * Benchmark source code is MIT-licensed
  * See LICENSE.txt for details
  */

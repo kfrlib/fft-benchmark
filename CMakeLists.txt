@@ -56,12 +56,14 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 set(COMMON_INCLUDES ${CMAKE_CURRENT_LIST_DIR}/src)
 
-set(COMMON_SRCS ${CMAKE_CURRENT_LIST_DIR}/src/fft_benchmark.cpp ${CMAKE_CURRENT_LIST_DIR}/src/benchmark.hpp
-                ${CMAKE_CURRENT_LIST_DIR}/src/benchmark.cpp ${CMAKE_CURRENT_LIST_DIR}/src/fft_vectors.c)
+set(COMMON_SRCS ${CMAKE_CURRENT_LIST_DIR}/src/benchmark.cpp ${CMAKE_CURRENT_LIST_DIR}/src/benchmark.hpp)
+set(FFT_SRCS ${CMAKE_CURRENT_LIST_DIR}/src/fft_benchmark.cpp ${CMAKE_CURRENT_LIST_DIR}/src/fft_benchmark.hpp
+             ${CMAKE_CURRENT_LIST_DIR}/src/fft_vectors.c)
+set(SRC_SRCS ${CMAKE_CURRENT_LIST_DIR}/src/src_benchmark.cpp ${CMAKE_CURRENT_LIST_DIR}/src/src_benchmark.hpp)
 
 enable_testing()
 
-set(SIZES
+set(FFT_SIZES
     16
     32
     64
@@ -81,15 +83,33 @@ set(SIZES
     1048576)
 
 function (add_benchmark NAME)
-    cmake_parse_arguments(LIB "" "" "SOURCES;LIBRARIES;INCLUDES;DEFINITIONS" ${ARGN})
+    cmake_parse_arguments(LIB "FFT;SRC" "" "SOURCES;LIBRARIES;INCLUDES;DEFINITIONS" ${ARGN})
 
-    add_executable(fft_benchmark_${NAME} ${COMMON_SRCS} ${LIB_SOURCES})
-    target_link_libraries(fft_benchmark_${NAME} PRIVATE ${LIB_LIBRARIES})
-    target_include_directories(fft_benchmark_${NAME} PRIVATE ${COMMON_INCLUDES} ${LIB_INCLUDES})
-    target_compile_definitions(fft_benchmark_${NAME} PRIVATE ${LIB_DEFINITIONS})
+    if (NOT LIB_FFT AND NOT LIB_SRC)
+        message(FATAL_ERROR "Either FFT or SRC must be specified for benchmark ${NAME}")
+    endif ()
 
-    add_test(NAME benchmark_${NAME} COMMAND fft_benchmark_${NAME} --save ${CMAKE_BINARY_DIR}/results_${NAME}.json
-                                            --no-banner --no-progress ${SIZES} --complex y --inplace n --inverse n)
+    if (LIB_FFT)
+        add_executable(fft_benchmark_${NAME} ${COMMON_SRCS} ${FFT_SRCS} ${LIB_SOURCES})
+        target_link_libraries(fft_benchmark_${NAME} PRIVATE ${LIB_LIBRARIES})
+        target_include_directories(fft_benchmark_${NAME} PRIVATE ${COMMON_INCLUDES} ${LIB_INCLUDES})
+        target_compile_definitions(fft_benchmark_${NAME} PRIVATE ${LIB_DEFINITIONS})
+
+        add_test(
+            NAME benchmark_${NAME} COMMAND fft_benchmark_${NAME} --save ${CMAKE_BINARY_DIR}/results_${NAME}.json
+                                           --no-banner --no-progress ${FFT_SIZES} --complex y --inplace n --inverse n)
+
+    endif ()
+    if (LIB_SRC)
+        add_executable(src_benchmark_${NAME} ${COMMON_SRCS} ${SRC_SRCS} ${LIB_SOURCES})
+        target_link_libraries(src_benchmark_${NAME} PRIVATE ${LIB_LIBRARIES})
+        target_include_directories(src_benchmark_${NAME} PRIVATE ${COMMON_INCLUDES} ${LIB_INCLUDES})
+        target_compile_definitions(src_benchmark_${NAME} PRIVATE ${LIB_DEFINITIONS})
+
+        add_test(
+            NAME benchmark_src_${NAME} COMMAND src_benchmark_${NAME} --save
+                                               ${CMAKE_BINARY_DIR}/results_src_${NAME}.json --no-banner --no-progress)
+    endif ()
 endfunction ()
 
 add_subdirectory(libs)

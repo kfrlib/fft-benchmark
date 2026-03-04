@@ -1,6 +1,6 @@
 /**
  * FFT bencmarking tool (https://www.kfrlib.com)
- * Copyright (C) 2016-2026 Dan Cazarin
+ * Copyright (C) 2016-2026 Dan Casarin
  * Benchmark source code is MIT-licensed
  * See LICENSE.txt for details
  */
@@ -318,6 +318,7 @@ static void run(const std::vector<size_t>& sizes, bool progress)
 
 int main(int argc, char** argv)
 {
+    setvbuf(stdout, NULL, _IONBF, 0);
     using namespace std::string_view_literals;
 
     for (size_t i = 1; i < argc; i++)
@@ -350,6 +351,10 @@ int main(int argc, char** argv)
         {
             banner = false;
         }
+        else if (argv[i] == "--banner"sv)
+        {
+            banner = true;
+        }
         else if (argv[i] == "--complex"sv)
         {
             if (i + 1 < argc)
@@ -373,10 +378,6 @@ int main(int argc, char** argv)
                 inverse_list = to_vector_bool(argv[i + 1]);
                 ++i;
             }
-        }
-        else if (argv[i] == "--banner"sv)
-        {
-            banner = true;
         }
         else if (argv[i] == "--avx2-only"sv)
         {
@@ -402,7 +403,7 @@ int main(int argc, char** argv)
 
     if (banner)
     {
-        printf("FFT/DFT benchmarking tool. Copyright (C) 2016-2026 Dan Cazarin https://www.kfrlib.com\n");
+        printf("FFT/DFT benchmarking tool. Copyright (C) 2016-2026 Dan Casarin https://www.kfrlib.com\n");
         printf("Benchmark source code is MIT-licensed\n");
         printf("DFT/FFT libraries have their own licenses. Please refer to the respective source code for "
                "details.\n");
