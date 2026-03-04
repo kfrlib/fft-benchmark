@@ -92,4 +92,4 @@ function (add_fft NAME)
                                             --no-banner --no-progress ${SIZES} --complex y --inplace n --inverse n)
 endfunction ()
 
-add_subdirectory(fftlibs)
+add_subdirectory(libs)
