@@ -6,16 +6,16 @@ Measures the performance of real/complex, in-place/out-of-place, forward/inverse
 
 ## Supported libraries
 
-| Library | Float | Double | 1D | 2D | 3D | Notes |
-|---------|:-----:|:------:|:--:|:--:|:---:|-------|
-| [KFR](https://github.com/kfrlib/kfr) | ✅ | ✅ | ✅ | ✅ | ✅ | Real transforms require even sizes |
-| [Intel IPP](https://www.intel.com/content/www/us/en/developer/tools/oneapi/ipp.html) | ✅ | ✅ | ✅ | ❌ | ❌ | |
-| [Intel MKL](https://www.intel.com/content/www/us/en/developer/tools/oneapi/onemkl.html) | ✅ | ✅ | ✅ | ✅ | ✅ | |
-| [FFTW](http://www.fftw.org/) | ✅ | ✅ | ✅ | ✅ | ✅ | |
-| [Sleef](https://sleef.org/) | ✅ | ✅ | ✅ | ❌ | ❌ | |
-| [PFFFT](https://bitbucket.org/jpommier/pffft/) | ✅ | ❌ | ✅ | ❌ | ❌ | Float-only |
-| [JUCE](https://juce.com/) | ✅ | ❌ | ✅ | ❌ | ❌ | Float-only, power-of-2 sizes only |
-| [KissFFT](https://github.com/mborgerding/kissfft) | ✅ | ✅ | ✅ | ❌ | ❌ | No real inverse; out-of-place only |
+| Library                                                                                 | Float | Double | 1D | 2D & 3D | Notes                              | Installation |
+|-----------------------------------------------------------------------------------------|:-----:|:------:|:--:|:-------:|------------------------------------|--------------|
+| [KFR](https://github.com/kfrlib/kfr)                                                    |   ✅   |   ✅    | ✅  |    ✅    | Real transforms require even sizes | Manual       |
+| [Intel IPP](https://www.intel.com/content/www/us/en/developer/tools/oneapi/ipp.html)    |   ✅   |   ✅    | ✅  |    ❌    |                                    | Manual       |
+| [Intel MKL](https://www.intel.com/content/www/us/en/developer/tools/oneapi/onemkl.html) |   ✅   |   ✅    | ✅  |    ✅    |                                    | Manual       |
+| [FFTW](http://www.fftw.org/)                                                            |   ✅   |   ✅    | ✅  |    ✅    |                                    | Vcpkg        |
+| [Sleef](https://sleef.org/)                                                             |   ✅   |   ✅    | ✅  |    ❌    |                                    | Vcpkg        |
+| [PFFFT](https://bitbucket.org/jpommier/pffft/)                                          |   ✅   |   ❌    | ✅  |    ❌    | Float-only                         | Vcpkg        |
+| [JUCE](https://juce.com/)                                                               |   ✅   |   ❌    | ✅  |    ❌    | Float-only, power-of-2 sizes only  | Vcpkg        |
+| [KissFFT](https://github.com/mborgerding/kissfft)                                       |   ✅   |   ✅    | ✅  |    ❌    | No real inverse; out-of-place only | Bundled      |
 
 **Note:** Multithreading is disabled for fair comparison, as only a few libraries support it.
 
@@ -33,11 +33,12 @@ All libraries are **optional** — if not found via CMake's `find_package`, they
 
 ### Setup
 
-`CMAKE_PREFIX_PATH` should contain the paths to CMake configs of the libraries you want to benchmark.
+See [`.github/workflows/build.yml`](.github/workflows/build.yml) for an example of how to set up the environment for building and running the benchmarks.
+
+Some libraries are available as packages in vcpkg and they will be found automatically on cmake configuration as vcpkg is bundled as submodule. Some libraries (e.g. KFR, Intel libraries) require manual installation, so you need to specify the paths to their CMake configs in `CMAKE_PREFIX_PATH`.
 
 Example:
 ```
-C:/vcpkg/installed/x64-windows-static-md/share
 C:/Program Files (x86)/Intel/oneAPI/ipp/2021.9.0/lib/cmake/ipp
 C:/Program Files (x86)/Intel/oneAPI/mkl/2026.0/lib/cmake/mkl
 kfr-install-dir/lib/cmake
@@ -108,7 +109,7 @@ Each benchmark run produces a JSON file with the following structure:
             "buffer": "outofplace",
             "mflops": 12345.67,
             "best_time": 0.83,
-            "avg_time": 0.91
+            "median_time": 0.91
         }
     ]
 }
