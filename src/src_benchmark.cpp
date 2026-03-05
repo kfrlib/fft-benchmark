@@ -177,11 +177,12 @@ static void run_accuracy_t(unsigned out_rate, unsigned in_rate, bool progress)
     if (progress)
     {
         if (can_measure_stopband)
-            printf("  %6s  ripple %8.4f dB  -3dB %8.1f Hz  -6dB %8.1f Hz  atten %7.1f dB\n", type_name<real>,
-                   passband_ripple, cutoff_3dB, cutoff_6dB, stopband_atten);
+            printf(
+                "  %6s  ripple %8.4f dB  -3dB %8.1f Hz  -6dB %8.1f Hz  transition %6.1f Hz atten %7.1f dB\n",
+                type_name<real>, passband_ripple, cutoff_3dB, cutoff_6dB, transition_1_60, stopband_atten);
         else
-            printf("  %6s  ripple %8.4f dB  -3dB %8.1f Hz  -6dB %8.1f Hz  atten    n/a\n", type_name<real>,
-                   passband_ripple, cutoff_3dB, cutoff_6dB);
+            printf("  %6s  ripple %8.4f dB  -3dB %8.1f Hz  -6dB %8.1f Hz  transition %6.1f Hz atten    n/a\n",
+                   type_name<real>, passband_ripple, cutoff_3dB, cutoff_6dB, transition_1_60);
     }
 }
 
@@ -282,8 +283,10 @@ static void run_twoway(unsigned out_rate, unsigned in_rate, unsigned length, boo
 }
 
 static std::string outname;
-static bool progress = true;
-static bool banner   = true;
+static bool progress    = true;
+static bool banner      = true;
+static bool accuracy    = true;
+static bool performance = true;
 
 int main(int argc, char** argv)
 {
@@ -299,6 +302,22 @@ int main(int argc, char** argv)
                 outname = argv[i + 1];
                 ++i;
             }
+        }
+        else if (argv[i] == "--no-accuracy"sv)
+        {
+            accuracy = false;
+        }
+        else if (argv[i] == "--accuracy"sv)
+        {
+            accuracy = true;
+        }
+        else if (argv[i] == "--no-performance"sv)
+        {
+            performance = false;
+        }
+        else if (argv[i] == "--performance"sv)
+        {
+            performance = true;
         }
         else if (argv[i] == "--no-progress"sv)
         {
@@ -362,27 +381,33 @@ int main(int argc, char** argv)
     json_key("library");
     json_string(srcname);
 
-    json_key("performance");
-    json_open_array();
-
     constexpr std::pair<unsigned, unsigned> test_cases[] = {
         { 48000, 44100 },
         { 96000, 48000 },
         { 40009, 19997 },
     };
 
-    for (const auto& [out_rate, in_rate] : test_cases)
-        run_twoway(out_rate, in_rate, 60, progress);
+    if (performance)
+    {
+        json_key("performance");
+        json_open_array();
 
-    json_close_array();
+        for (const auto& [out_rate, in_rate] : test_cases)
+            run_twoway(out_rate, in_rate, 60, progress);
 
-    json_key("accuracy");
-    json_open_array();
+        json_close_array();
+    }
 
-    for (const auto& [out_rate, in_rate] : test_cases)
-        run_accuracy_twoway(out_rate, in_rate, progress);
+    if (accuracy)
+    {
+        json_key("accuracy");
+        json_open_array();
 
-    json_close_array();
+        for (const auto& [out_rate, in_rate] : test_cases)
+            run_accuracy_twoway(out_rate, in_rate, progress);
+
+        json_close_array();
+    }
 
     json_close_object();
 
