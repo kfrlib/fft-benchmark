@@ -7,11 +7,199 @@
 
 #include "src_benchmark.hpp"
 #include "json.hpp"
+#include <../libs/kissfft/kissfft.hh>
 #include <cinttypes>
 
 #define NOMINMAX 1
 
 bool avx2only = false;
+
+// Largest power of 2 <= n (C++17-compatible replacement for std::bit_floor)
+static size_t bit_floor(size_t n)
+{
+    if (n == 0)
+        return 0;
+    size_t p = 1;
+    while (p * 2 <= n)
+        p *= 2;
+    return p;
+}
+
+template <typename real>
+static void run_accuracy_t(unsigned out_rate, unsigned in_rate, bool progress)
+{
+    constexpr unsigned length = 20; // seconds of test signal
+    src_impl_ptr<real> src(src_create<real>(out_rate, in_rate, length));
+    if (!src || !src->valid)
+    {
+        if (progress)
+            printf("  %6s  (not available)\n", type_name<real>);
+        return;
+    }
+
+    size_t in_length  = static_cast<size_t>(in_rate) * length;
+    size_t out_length = static_cast<size_t>(out_rate) * length;
+
+    // Generate unit impulse at the middle of the input buffer so both pre-ring
+    // and post-ring are captured regardless of the SRC's latency compensation.
+    std::vector<real, aligned_allocator<real>> in(in_length, real(0));
+    std::vector<real, aligned_allocator<real>> out(out_length, real(0));
+    in[in_length / 2] = real(1);
+    src->execute(out.data(), in.data());
+
+    // FFT of the impulse response
+    size_t fft_size = bit_floor(out_length);
+    size_t half     = fft_size / 2;
+
+    using cpx_t = std::complex<real>;
+    std::vector<cpx_t> fft_in(fft_size);
+    std::vector<cpx_t> fft_out(fft_size);
+    for (size_t i = 0; i < fft_size; i++)
+        fft_in[i] = cpx_t(out[i], real(0));
+
+    kissfft<real> fft(fft_size, false);
+    fft.transform(fft_in.data(), fft_out.data());
+
+    // Magnitude in dB, normalized so DC = 0 dB
+    double dc_mag = static_cast<double>(std::abs(fft_out[0]));
+    if (dc_mag < 1e-30)
+        dc_mag = 1e-30;
+
+    std::vector<double> mag_db(half + 1);
+    for (size_t i = 0; i <= half; i++)
+    {
+        double mag = static_cast<double>(std::abs(fft_out[i]));
+        mag_db[i]  = 20.0 * std::log10(std::max(mag / dc_mag, 1e-30));
+    }
+
+    double freq_per_bin  = static_cast<double>(out_rate) / static_cast<double>(fft_size);
+    double nyquist_lower = static_cast<double>(std::min(in_rate, out_rate)) / 2.0;
+
+    // --- Passband analysis ---
+    // Passband: skip DC, up to 95% of the lower Nyquist
+    size_t pb_start = 1;
+    size_t pb_end   = static_cast<size_t>(0.95 * nyquist_lower / freq_per_bin);
+    pb_end          = std::min(pb_end, half);
+
+    double pb_max = -1e30, pb_min = 1e30;
+    for (size_t i = pb_start; i <= pb_end; i++)
+    {
+        pb_max = std::max(pb_max, mag_db[i]);
+        pb_min = std::min(pb_min, mag_db[i]);
+    }
+    double passband_ripple = (pb_end >= pb_start) ? (pb_max - pb_min) : 0.0;
+
+    // --- Cutoff frequencies (with linear interpolation) ---
+    auto find_cutoff = [&](double threshold_db) -> double
+    {
+        for (size_t i = 1; i <= half; i++)
+        {
+            if (mag_db[i] < threshold_db)
+            {
+                // Interpolate between bin i-1 and bin i
+                if (mag_db[i - 1] >= threshold_db)
+                {
+                    double frac = (threshold_db - mag_db[i - 1]) / (mag_db[i] - mag_db[i - 1]);
+                    return (static_cast<double>(i - 1) + frac) * freq_per_bin;
+                }
+                return static_cast<double>(i) * freq_per_bin;
+            }
+        }
+        return static_cast<double>(half) * freq_per_bin; // never crossed
+    };
+
+    double cutoff_1dB   = find_cutoff(-1.0);
+    double cutoff_3dB   = find_cutoff(-3.0);
+    double cutoff_6dB   = find_cutoff(-6.0);
+    double cutoff_60dB  = find_cutoff(-60.0);
+    double cutoff_120dB = find_cutoff(-120.0);
+
+    double transition_1_60 = cutoff_60dB - cutoff_1dB;
+
+    // --- Stopband attenuation ---
+    // Only meaningful for upsampling where there's spectrum above the input Nyquist.
+    // Start measuring from the -60 dB cutoff (end of transition band) or just past
+    // the lower Nyquist, whichever is higher.
+    double out_nyquist = static_cast<double>(out_rate) / 2.0;
+    bool can_measure_stopband =
+        (out_rate > in_rate) && (cutoff_60dB < out_nyquist * 0.98); // need at least 2% room
+    double stopband_atten = 0.0;
+    if (can_measure_stopband)
+    {
+        size_t sb_start = static_cast<size_t>(std::max(cutoff_60dB, nyquist_lower) / freq_per_bin) + 1;
+        sb_start        = std::min(sb_start, half);
+        stopband_atten  = -1000.0;
+        for (size_t i = sb_start; i <= half; i++)
+            stopband_atten = std::max(stopband_atten, mag_db[i]);
+    }
+
+    // --- JSON output ---
+    json_open_object();
+    json_key("data");
+    json_string(type_name<real>);
+    json_key("out_rate");
+    json_number(out_rate);
+    json_key("in_rate");
+    json_number(in_rate);
+    json_key("passband_ripple_dB");
+    json_number(passband_ripple);
+    json_key("cutoff_neg1dB_Hz");
+    json_number(cutoff_1dB);
+    json_key("cutoff_neg3dB_Hz");
+    json_number(cutoff_3dB);
+    json_key("cutoff_neg6dB_Hz");
+    json_number(cutoff_6dB);
+    json_key("cutoff_neg60dB_Hz");
+    json_number(cutoff_60dB);
+    json_key("cutoff_neg120dB_Hz");
+    json_number(cutoff_120dB);
+    json_key("transition_width_1_60_Hz");
+    json_number(transition_1_60);
+    if (can_measure_stopband)
+    {
+        json_key("stopband_attenuation_dB");
+        json_number(stopband_atten);
+    }
+
+    // Decimated frequency response curve (~4096 points max)
+    size_t response_count = half + 1;
+    size_t step           = std::max(size_t(1), response_count / 4096);
+    json_key("response_freq_step_Hz");
+    json_number(freq_per_bin * static_cast<double>(step));
+    json_key("response_magnitude_dB");
+    json_open_array();
+    for (size_t i = 0; i <= half; i += step)
+        json_number(mag_db[i]);
+    json_close_array();
+
+    json_close_object();
+
+    if (progress)
+    {
+        if (can_measure_stopband)
+            printf("  %6s  ripple %8.4f dB  -3dB %8.1f Hz  -6dB %8.1f Hz  atten %7.1f dB\n", type_name<real>,
+                   passband_ripple, cutoff_3dB, cutoff_6dB, stopband_atten);
+        else
+            printf("  %6s  ripple %8.4f dB  -3dB %8.1f Hz  -6dB %8.1f Hz  atten    n/a\n", type_name<real>,
+                   passband_ripple, cutoff_3dB, cutoff_6dB);
+    }
+}
+
+static void run_accuracy(unsigned out_rate, unsigned in_rate, bool progress)
+{
+    if (progress)
+        printf("Accuracy SRC %u Hz -> %u Hz\n", in_rate, out_rate);
+    run_accuracy_t<float>(out_rate, in_rate, progress);
+    run_accuracy_t<double>(out_rate, in_rate, progress);
+    if (progress)
+        printf("--------------------------------------------------------------\n");
+}
+
+static void run_accuracy_twoway(unsigned out_rate, unsigned in_rate, bool progress)
+{
+    run_accuracy(out_rate, in_rate, progress);
+    run_accuracy(in_rate, out_rate, progress);
+}
 
 template <typename real>
 static void run_t(unsigned out_rate, unsigned in_rate, unsigned length, bool progress)
@@ -77,7 +265,7 @@ static void run(unsigned out_rate, unsigned in_rate, unsigned length, bool progr
 {
     if (progress)
     {
-        printf("Benchmarking SRC from %u Hz to %u Hz for %u seconds\n", in_rate, out_rate, length);
+        printf("Benchmarking SRC from %u Hz to %u Hz\n", in_rate, out_rate);
         printf("%6s  %15s %6s %15s %6s\n", "Type", "Median Time", "xRT", "Best Time", "xRT");
     }
     run_t<float>(out_rate, in_rate, length, progress);
@@ -86,6 +274,11 @@ static void run(unsigned out_rate, unsigned in_rate, unsigned length, bool progr
     {
         printf("--------------------------------------------------------------\n");
     }
+}
+static void run_twoway(unsigned out_rate, unsigned in_rate, unsigned length, bool progress)
+{
+    run(out_rate, in_rate, length, progress);
+    run(in_rate, out_rate, length, progress);
 }
 
 static std::string outname;
@@ -172,12 +365,22 @@ int main(int argc, char** argv)
     json_key("performance");
     json_open_array();
 
-    run(19997, 40009, 60, progress);
-    run(40009, 19997, 60, progress);
-    run(48000, 44100, 60, progress);
-    run(44100, 48000, 60, progress);
-    run(96000, 48000, 60, progress);
-    run(48000, 96000, 60, progress);
+    constexpr std::pair<unsigned, unsigned> test_cases[] = {
+        { 48000, 44100 },
+        { 96000, 48000 },
+        { 40009, 19997 },
+    };
+
+    for (const auto& [out_rate, in_rate] : test_cases)
+        run_twoway(out_rate, in_rate, 60, progress);
+
+    json_close_array();
+
+    json_key("accuracy");
+    json_open_array();
+
+    for (const auto& [out_rate, in_rate] : test_cases)
+        run_accuracy_twoway(out_rate, in_rate, progress);
 
     json_close_array();
 

@@ -147,6 +147,16 @@ template std::unique_ptr<fft_impl<double>> fft_create<double>(const std::vector<
 
 std::string src_name()
 {
+    double att =
+        kfr::samplerate_converter<double>::sidelobe_attenuation(kfr::sample_rate_conversion_quality::high);
+    double trans =
+        kfr::samplerate_converter<double>::transition_width(kfr::sample_rate_conversion_quality::high);
+    unsigned order =
+        kfr::samplerate_converter<double>::filter_order(kfr::sample_rate_conversion_quality::high);
+    double param = kfr::samplerate_converter<double>::window_param(kfr::sample_rate_conversion_quality::high);
+    printf("sidelobe attenuation: %f dB, transition width: %f radians, filter order: %u, param = %f\n", att,
+           trans, order, param);
+
 #if defined(__x86_64__) || defined(_M_X64)
     if (avx2only)
     {

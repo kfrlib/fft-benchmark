@@ -7,6 +7,7 @@
 
 #include "ipp.h"
 #include "fft_benchmark.hpp"
+#include "src_benchmark.hpp"
 #if __has_include("ipp/ipps.h")
 #include "ipp/ipps.h"
 #else
@@ -96,11 +97,11 @@ class fft_implementation<1, real, false, invert, inplace> : public fft_impl<real
 public:
     PICK;
 
-    using IppsDFTSpec_R_T                      = pick_t<IppsDFTSpec_R_32f, IppsDFTSpec_R_64f>;
+    using IppsDFTSpec_R_T                     = pick_t<IppsDFTSpec_R_32f, IppsDFTSpec_R_64f>;
     constexpr static auto ippsDFTInv_CCSToR_T = pick(ippsDFTInv_CCSToR_32f, ippsDFTInv_CCSToR_64f);
     constexpr static auto ippsDFTFwd_RToCCS_T = pick(ippsDFTFwd_RToCCS_32f, ippsDFTFwd_RToCCS_64f);
-    constexpr static auto ippsDFTGetSize_R_T   = pick(ippsDFTGetSize_R_32f, ippsDFTGetSize_R_64f);
-    constexpr static auto ippsDFTInit_R_T      = pick(ippsDFTInit_R_32f, ippsDFTInit_R_64f);
+    constexpr static auto ippsDFTGetSize_R_T  = pick(ippsDFTGetSize_R_32f, ippsDFTGetSize_R_64f);
+    constexpr static auto ippsDFTInit_R_T     = pick(ippsDFTInit_R_32f, ippsDFTInit_R_64f);
 
     fft_implementation(sizes_t<1> size)
     {
@@ -146,3 +147,91 @@ fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, bool is_complex, 
 
 template std::unique_ptr<fft_impl<float>> fft_create<float>(const std::vector<size_t>&, bool, bool, bool);
 template std::unique_ptr<fft_impl<double>> fft_create<double>(const std::vector<size_t>&, bool, bool, bool);
+
+std::string src_name()
+{
+    ippInit();
+#if defined(__x86_64__) || defined(_M_X64)
+    if (avx2only)
+    {
+        fprintf(stderr, "IPP: enabling AVX2\n");
+        ippSetCpuFeatures(ippCPUID_MMX | ippCPUID_SSE | ippCPUID_SSE2 | ippCPUID_SSE3 | ippCPUID_SSSE3 |
+                          ippCPUID_MOVBE | ippCPUID_SSE41 | ippCPUID_SSE42 | ippCPUID_AES | ippCPUID_CLMUL |
+                          ippCPUID_SHA | ippCPUID_AVX | ippAVX_ENABLEDBYOS | ippCPUID_RDRAND | ippCPUID_F16C |
+                          ippCPUID_AVX2 | ippCPUID_MOVBE | ippCPUID_ADCOX | ippCPUID_RDSEED |
+                          ippCPUID_PREFETCHW);
+    }
+#endif
+    const IppLibraryVersion* ver = ippsGetLibVersion();
+    return std::string(ver->Name) + ver->Version;
+}
+
+template <typename real>
+struct src_implementation;
+
+template <>
+struct src_implementation<float> : public src_impl<float>
+{
+    src_implementation(unsigned out_rate, unsigned in_rate, unsigned seconds)
+    {
+        out_length = out_rate * seconds;
+        in_length  = in_rate * seconds;
+
+        int specSize         = 0;
+        int filterHeight     = 0;
+        const int filterSize = 2048; // Matches the filter size used by KFR's high preset
+        const Ipp32f rollf   = 0.99f; // fraction of lower Nyquist where passband ends
+        const Ipp32f alpha   = 14.47f; // Kaiser window parameter (~140 dB sidelobe attenuation)
+
+        ippsResamplePolyphaseFixedGetSize_32f(in_rate, out_rate, filterSize, &specSize, &filterLen,
+                                              &filterHeight, ippAlgHintAccurate);
+        spec = (IppsResamplingPolyphaseFixed_32f*)ippsMalloc_8u(specSize);
+        ippsResamplePolyphaseFixedInit_32f(in_rate, out_rate, filterSize, rollf, alpha, spec,
+                                           ippAlgHintAccurate);
+        // ippsResamplePolyphaseFixed_32f reads filterLen/2 samples before the time
+        // position, so we must prepend history zeros to avoid out-of-bounds reads.
+        history   = filterLen / 2;
+        paddedLen = static_cast<int>(in_length) + filterLen + 2;
+        paddedBuf = ippsMalloc_32f(paddedLen);
+        ippsZero_32f(paddedBuf, paddedLen);
+    }
+
+    void execute(float* out, const float* in) final
+    {
+        // Copy input into padded buffer after the history region
+        ippsCopy_32f(in, paddedBuf + history, static_cast<int>(in_length));
+
+        Ipp64f time = history;
+        int outlen  = 0;
+        ippsResamplePolyphaseFixed_32f(paddedBuf, static_cast<int>(in_length), out, 1.0f, &time, &outlen,
+                                       spec);
+    }
+
+    ~src_implementation()
+    {
+        if (paddedBuf)
+            ippsFree(paddedBuf);
+        if (spec)
+            ippsFree(spec);
+    }
+
+    IppsResamplingPolyphaseFixed_32f* spec = nullptr;
+    Ipp32f* paddedBuf                      = nullptr;
+    int paddedLen;
+    size_t out_length;
+    size_t in_length;
+    int filterLen;
+    int history;
+};
+
+template <typename real>
+src_impl_ptr<real> src_create(unsigned out_rate, unsigned in_rate, unsigned seconds)
+{
+    if constexpr (std::is_same_v<real, float>)
+        return src_impl_ptr<float>(new src_implementation<float>(out_rate, in_rate, seconds));
+    else
+        return nullptr; // IPP resampling only supports 32f
+}
+
+template std::unique_ptr<src_impl<float>> src_create<float>(unsigned, unsigned, unsigned);
+template std::unique_ptr<src_impl<double>> src_create<double>(unsigned, unsigned, unsigned);
