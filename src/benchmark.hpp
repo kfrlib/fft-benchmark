@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
+#include <cmath>
 #ifdef _WIN32
 #include <intrin.h>
 #else
