@@ -35,7 +35,7 @@
             "name": "libsamplerate"
         },
         {
-            "name": "speex"
+            "name": "speexdsp"
         }
     ]
 }
