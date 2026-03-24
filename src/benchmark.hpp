@@ -8,8 +8,9 @@
 
 #include <algorithm>
 #include <chrono>
-#include <cstdint>
 #include <cmath>
+#include <cstdint>
+
 #ifdef _WIN32
 #include <intrin.h>
 #else
@@ -141,7 +142,7 @@ inline void full_barrier()
     std::atomic_thread_fence(std::memory_order_seq_cst);
 #endif
 }
-extern std::chrono::nanoseconds start_time;
+extern uint64_t start_time;
 } // namespace details
 
 #if defined(_WIN32)
@@ -225,10 +226,7 @@ extern double tsc_scale;
 void calibrate_tsc();
 } // namespace details
 
-inline std::chrono::nanoseconds tsc_time()
-{
-    return std::chrono::nanoseconds(static_cast<uint64_t>(details::rdtsc() * details::tsc_scale));
-}
+inline uint64_t tsc_time() { return details::rdtsc(); }
 
 inline double tsc_resolution() { return details::tsc_scale; }
 
@@ -256,8 +254,8 @@ inline void bench_start()
 inline std::chrono::nanoseconds bench_stop()
 {
     // rdtsc() already contains lfence;read;lfence — no extra barriers needed.
-    std::chrono::nanoseconds stop_time = tsc_time();
-    return stop_time - details::start_time;
+    uint64_t stop_time = tsc_time();
+    return std::chrono::nanoseconds(uint64_t((stop_time - details::start_time) * details::tsc_scale));
 }
 #endif
 

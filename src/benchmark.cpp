@@ -22,7 +22,7 @@ void use_from_outside(const char volatile* in) { (void)in; }
 namespace details
 {
 
-std::chrono::nanoseconds start_time;
+uint64_t start_time;
 
 double tsc_scale = 0;
 

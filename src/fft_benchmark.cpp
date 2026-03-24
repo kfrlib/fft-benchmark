@@ -59,8 +59,7 @@ constexpr inline const char* inplace_str(bool inplace)
 template <typename real>
 struct fft_benchmark_runner
 {
-    constexpr static int preheat_calls = 5;
-    constexpr static int calls_per_run = 10;
+    constexpr static int preheat_calls = 10;
 
     static double compute_max_error(const real* data, const double* refout, size_t out_size)
     {
@@ -166,7 +165,7 @@ struct fft_benchmark_runner
     }
 
     static void benchmark(std::vector<size_t> sizes, bool is_complex, bool inverse, bool inplace,
-                          bool progress, uint32_t benchmark_duration = 2500)
+                          bool progress, uint32_t benchmark_duration = 5000)
     {
         json_open_object();
         json_key("size");
@@ -216,6 +215,8 @@ struct fft_benchmark_runner
         std::chrono::nanoseconds total_duration(0);
         uint64_t total_calls = 0;
         std::vector<double> batch_times; // per-call time (seconds) for each batch
+        const static int calls_per_run =
+            size >= 256 ? 5 : 10; // more calls for smaller sizes to get stable measurements
 
         {
             benchmark_scope scope;
@@ -242,8 +243,7 @@ struct fft_benchmark_runner
                 if (inplace)
                     std::copy(in, in + size * 2, out);
 
-                if ((total_duration >= std::chrono::milliseconds(benchmark_duration) && total_calls >= 50) ||
-                    total_calls >= 1000'000)
+                if ((total_duration >= std::chrono::milliseconds(benchmark_duration) && total_calls >= 50))
                     break;
             }
         } // benchmark_scope
@@ -288,7 +288,7 @@ struct fft_benchmark_runner
 static std::string outname;
 static bool progress = true;
 static bool banner   = true;
-static bool accuracy = true;
+static bool accuracy = false;
 bool avx2only        = false;
 static std::vector<std::vector<size_t>> sizes;
 static std::vector<bool> is_complex_list{ true, false };
@@ -441,13 +441,6 @@ int main(int argc, char** argv)
 
     json_open_object();
 
-    if (progress)
-    {
-
-        printf("%-6s %-7s %-9s %-10s %11s %12s | %14s%12s | %14s%12s | %7s\n", "data", "type", "direction",
-               "buffer", "size", "mflops", "best time", "(ops/sec)", "med. time", "(ops/sec)", "calls");
-    }
-
     json_key("cpu");
     json_string(cpuname);
 
@@ -473,6 +466,12 @@ int main(int argc, char** argv)
     {
         fprintf(stderr, "No sizes specified\n");
         return 1;
+    }
+
+    if (progress)
+    {
+        printf("%-6s %-7s %-9s %-10s %11s %12s | %14s%12s | %14s%12s | %7s\n", "data", "type", "direction",
+               "buffer", "size", "mflops", "best time", "(ops/sec)", "med. time", "(ops/sec)", "calls");
     }
 
     for (auto size : sizes)

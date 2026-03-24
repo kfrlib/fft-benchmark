@@ -9,10 +9,13 @@
 #include "json.hpp"
 #include <../libs/kissfft/kissfft.hh>
 #include <cinttypes>
+#include <random>
 
 #define NOMINMAX 1
 
 bool avx2only = false;
+
+std::string executable;
 
 // Largest power of 2 <= n (C++17-compatible replacement for std::bit_floor)
 static size_t bit_floor(size_t n)
@@ -28,7 +31,39 @@ static size_t bit_floor(size_t n)
 template <typename real>
 static void run_accuracy_t(unsigned out_rate, unsigned in_rate, bool progress)
 {
-    constexpr unsigned length = 20; // seconds of test signal
+    {
+        constexpr unsigned length = 9; // seconds of test signal
+        src_impl_ptr<real> src(src_create<real>(out_rate, in_rate, length));
+        if (!src || !src->valid)
+        {
+            if (progress)
+                printf("  %6s  (not available)\n", type_name<real>);
+            return;
+        }
+        std::vector<real, aligned_allocator<real>> in(in_rate * length, 0); // 8 seconds at 48 kHz
+        std::vector<real, aligned_allocator<real>> out(out_rate * length);
+        size_t size        = in.size() - in_rate;
+        const double magn  = 0.9;
+        const double scale = 3.1415926535897932384626433832795 / (4.0 * size * size * size);
+
+        for (size_t i = 0; i < size; i++)
+        {
+            const double i2 = static_cast<double>(i) * static_cast<double>(i);
+            in[i]           = static_cast<real>(magn * std::sin(scale * i2 * i2));
+        }
+
+        src->execute(out.data(), in.data());
+
+        std::string filename = std::string("src_accuracy_") + executable + "_" + type_name<real> + "_" +
+                               std::to_string(in_rate) + "to" + std::to_string(out_rate) + ".bin";
+        FILE* f = fopen(filename.c_str(), "wb");
+        if (f)
+        {
+            fwrite(out.data(), sizeof(real), out.size(), f);
+            fclose(f);
+        }
+    }
+    constexpr unsigned length = 2; // seconds of test signal
     src_impl_ptr<real> src(src_create<real>(out_rate, in_rate, length));
     if (!src || !src->valid)
     {
@@ -226,8 +261,15 @@ static void run_t(unsigned out_rate, unsigned in_rate, unsigned length, bool pro
     // length is in seconds
     size_t in_length  = in_rate * length;
     size_t out_length = out_rate * length;
-    std::vector<real, aligned_allocator<real>> in(in_length, real(0));
+    std::vector<real, aligned_allocator<real>> in(in_length);
     std::vector<real, aligned_allocator<real>> out(out_length, real(0));
+
+    {
+        std::mt19937 rng(12345);
+        std::uniform_real_distribution<real> dist(-1, 1);
+        for (size_t i = 0; i < in_length; i++)
+            in[i] = dist(rng);
+    }
 
     constexpr size_t warmup_iterations = 2;
     constexpr size_t iterations        = 10;
@@ -292,6 +334,8 @@ int main(int argc, char** argv)
 {
     setvbuf(stdout, NULL, _IONBF, 0);
     using namespace std::string_view_literals;
+
+    executable = execfile(argv[0]);
 
     for (size_t i = 1; i < argc; i++)
     {
@@ -384,6 +428,8 @@ int main(int argc, char** argv)
     constexpr std::pair<unsigned, unsigned> test_cases[] = {
         { 48000, 44100 },
         { 96000, 48000 },
+        { 96000, 44100 },
+        { 48000, 16000 },
         { 40009, 19997 },
     };
 
