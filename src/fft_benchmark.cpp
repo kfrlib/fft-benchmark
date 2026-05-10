@@ -56,10 +56,59 @@ constexpr inline const char* inplace_str(bool inplace)
         return "outofplace";
 }
 
+// #define SYNTHETIC_WORKLOAD
+
+#ifdef SYNTHETIC_WORKLOAD
+
+[[clang::noinline]] void synthetic_fma(long long iterations)
+{
+    __m256 a = _mm256_set1_ps(1.00001f);
+    __m256 b = _mm256_set1_ps(0.99999f);
+    __m256 c = _mm256_set1_ps(0.50000f);
+    __m256 d = _mm256_set1_ps(1.41421f);
+
+    for (long long i = 0; i < iterations; i++)
+    {
+        a = _mm256_fmadd_ps(a, b, c); // port 0
+        b = _mm256_fmadd_ps(b, c, d); // port 1
+        c = _mm256_fmadd_ps(c, d, a); // back-dep on a
+        d = _mm256_fmadd_ps(d, a, b); // back-dep on a,b
+    }
+
+    volatile float sink =
+        _mm256_cvtss_f32(a) + _mm256_cvtss_f32(b) + _mm256_cvtss_f32(c) + _mm256_cvtss_f32(d);
+    (void)sink;
+}
+#endif
+
+template <typename real>
+BENCH_INLINE std::chrono::nanoseconds measure_fft(fft_impl<real>* fft, real* out, const real* in,
+                                                  size_t fft_size, size_t inner_iterations)
+{
+    for (int i = 0; i < inner_iterations; ++i)
+    {
+        fft->execute(out, in);
+        dont_optimize(out);
+    }
+#ifdef SYNTHETIC_WORKLOAD
+    uint64_t iter = std::log2(fft_size) * fft_size / 10;
+#endif
+    bench_start();
+    for (int i = 0; i < inner_iterations; ++i)
+    {
+#ifdef SYNTHETIC_WORKLOAD
+        synthetic_fma(iter);
+#else
+        fft->execute(out, in);
+#endif
+        dont_optimize(out);
+    }
+    return bench_stop();
+}
+
 template <typename real>
 struct fft_benchmark_runner
 {
-    constexpr static int preheat_calls = 10;
 
     static double compute_max_error(const real* data, const double* refout, size_t out_size)
     {
@@ -165,7 +214,7 @@ struct fft_benchmark_runner
     }
 
     static void benchmark(std::vector<size_t> sizes, bool is_complex, bool inverse, bool inplace,
-                          bool progress, uint32_t benchmark_duration = 5000)
+                          bool progress, uint32_t benchmark_duration = 10000)
     {
         json_open_object();
         json_key("size");
@@ -211,50 +260,44 @@ struct fft_benchmark_runner
         fill_random(in, size * 2);
         if (inplace)
             std::copy(in, in + size * 2, out);
-        std::chrono::nanoseconds minimum_duration(std::chrono::seconds(1000));
         std::chrono::nanoseconds total_duration(0);
         uint64_t total_calls = 0;
         std::vector<double> batch_times; // per-call time (seconds) for each batch
-        const static int calls_per_run =
-            size >= 256 ? 5 : 10; // more calls for smaller sizes to get stable measurements
+
+        size_t inner_iterations = size <= 256 ? 100 : size <= 262144 ? 10 : 1;
 
         {
             benchmark_scope scope;
             for (;;)
             {
-                for (int i = 0; i < preheat_calls; ++i)
-                {
-                    fft->execute(out, inplace ? out : in);
-                    dont_optimize(out);
-                }
-                bench_start();
-                for (int i = 0; i < calls_per_run; ++i)
-                {
-                    fft->execute(out, inplace ? out : in);
-                    dont_optimize(out);
-                }
-                auto run_duration = bench_stop();
+                std::chrono::nanoseconds run_duration;
+                if (inner_iterations == 100)
+                    run_duration = measure_fft<real>(fft.get(), out, inplace ? out : in, size, 100);
+                else
+                    run_duration =
+                        measure_fft<real>(fft.get(), out, inplace ? out : in, size, inner_iterations);
+
                 total_duration += run_duration;
-                minimum_duration = std::min(minimum_duration, run_duration);
-                total_calls += calls_per_run;
-                batch_times.push_back(std::chrono::duration<double>(run_duration).count() / calls_per_run);
+                total_calls += inner_iterations;
+                batch_times.push_back(std::chrono::duration<double>(run_duration).count() / inner_iterations);
 
                 fill_random(in, size * 2);
                 if (inplace)
                     std::copy(in, in + size * 2, out);
 
-                if ((total_duration >= std::chrono::milliseconds(benchmark_duration) && total_calls >= 50))
-                    break;
+                if (total_calls / inner_iterations >= 50)
+                {
+                    if (total_duration >= std::chrono::milliseconds(benchmark_duration))
+                        break;
+                }
             }
         } // benchmark_scope
 
-        [[maybe_unused]] double median_time = get_median(batch_times);
-        [[maybe_unused]] double minimum_time =
-            std::chrono::duration<double>(minimum_duration).count() / calls_per_run;
-        [[maybe_unused]] double opspersecond_median = 1.0 / median_time;
-        [[maybe_unused]] double opspersecond_best   = 1.0 / minimum_time;
+        [[maybe_unused]] auto times                 = get_percentiles(batch_times);
+        [[maybe_unused]] double opspersecond_median = 1.0 / times.p50_median;
+        [[maybe_unused]] double opspersecond_best   = 1.0 / times.p1;
 
-        double time_value = minimum_time;
+        double time_value = times.p1;
         // FFTW convention: complex FFT costs 5*N*log2(N) FLOP, real FFT half that.
         const double mflops =
             ((is_complex ? 5.0 : 2.5) * size * std::log((double)size) / (std::log(2.0) * time_value)) /
@@ -262,18 +305,20 @@ struct fft_benchmark_runner
 
         if (progress)
         {
-            printf("%-6s %-7s %-9s %-10s %11s %12.2f | %12.2fus%12.2f | %12.2fus%12.2f | %7" PRIu64 "\n",
+            char unit    = times.p1 < 1e-6 ? 'n' : 'u';
+            double scale = unit == 'n' ? 1e9 : 1e6;
+            printf("%-6s %-7s %-9s %-10s %11s %12.2f | %12.2f%cs%12.2f | %12.2f%cs%12.2f | %7" PRIu64 "\n",
                    type_name<real>, is_complex_str(is_complex), inverse_str(inverse), inplace_str(inplace),
-                   sizes_to_string(sizes).c_str(), mflops, minimum_time * 1'000'000, opspersecond_best,
-                   median_time * 1'000'000, opspersecond_median, total_calls);
+                   sizes_to_string(sizes).c_str(), mflops, times.p1 * scale, unit, opspersecond_best,
+                   times.p50_median * scale, unit, opspersecond_median, total_calls);
         }
 
         json_key("mflops");
         json_number(mflops);
         json_key("best_time");
-        json_number(minimum_time * 1'000'000);
+        json_number(times.p1 * 1'000'000);
         json_key("median_time");
-        json_number(median_time * 1'000'000);
+        json_number(times.p50_median * 1'000'000);
         json_close_object();
 
         if (progress)
@@ -436,7 +481,7 @@ int main(int argc, char** argv)
 
     if (progress)
     {
-        printf(" %.1fMHz\n", 1000.0 / tsc_resolution());
+        printf(" %.2fMHz\n", 1000.0 / tsc_resolution());
     }
 
     json_open_object();

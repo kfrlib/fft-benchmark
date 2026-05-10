@@ -5,9 +5,13 @@
  * See LICENSE.txt for details
  */
 #include "benchmark.hpp"
+#include <atomic>
+#include <vector>
 
 #ifdef _WIN32
+#include <intrin.h>
 #include <windows.h>
+
 #endif
 #ifdef __linux__
 #include <pthread.h>
@@ -21,6 +25,84 @@ void use_from_outside(const char volatile* in) { (void)in; }
 
 namespace details
 {
+
+#if defined(_WIN32)
+
+static HANDLE g_thread = nullptr;
+static std::atomic<bool> g_run{ false };
+
+static DWORD find_sibling(DWORD cpu)
+{
+    DWORD len = 0;
+    GetLogicalProcessorInformationEx(RelationProcessorCore, nullptr, &len);
+
+    std::vector<char> buf(len);
+    auto* info = (PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX)buf.data();
+
+    if (!GetLogicalProcessorInformationEx(RelationProcessorCore, info, &len))
+        return cpu;
+
+    char* ptr = buf.data();
+    char* end = ptr + len;
+
+    while (ptr < end)
+    {
+        auto* e = (PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX)ptr;
+
+        if (e->Relationship == RelationProcessorCore)
+        {
+            KAFFINITY mask = e->Processor.GroupMask[0].Mask;
+
+            if (mask & (1ull << cpu))
+            {
+                for (DWORD i = 0; i < 64; ++i)
+                {
+                    if ((mask & (1ull << i)) && i != cpu)
+                        return i;
+                }
+            }
+        }
+
+        ptr += e->Size;
+    }
+
+    return cpu; // no sibling (no SMT)
+}
+
+static DWORD WINAPI spin(void*)
+{
+    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
+    while (g_run.load(std::memory_order_relaxed))
+    {
+        for (uint32_t i = 0; i < 100000; ++i)
+            _mm_pause();
+    }
+    return 0;
+}
+
+void run_spin_thread_on_ht_sibling(DWORD core)
+{
+    DWORD sib = find_sibling(core);
+    if (sib == core)
+        return; // no SMT
+
+    g_run    = true;
+    g_thread = CreateThread(nullptr, 0, spin, nullptr, 0, nullptr);
+    SetThreadAffinityMask(g_thread, 1ull << sib);
+}
+
+void terminate_spin_thread()
+{
+    if (!g_thread)
+        return;
+
+    g_run = false;
+    WaitForSingleObject(g_thread, INFINITE);
+    CloseHandle(g_thread);
+    g_thread = nullptr;
+}
+
+#endif
 
 uint64_t start_time;
 
@@ -85,6 +167,8 @@ double qpc_scale = details::get_qpc_scale();
 #ifdef _WIN32
 static int old_prio;
 static DWORD_PTR old_affmask;
+static void (*NtSetTimerResolution)(ULONG, bool, PULONG) = nullptr;
+static ULONG oldresolution;
 #endif
 #ifdef __linux__
 static cpu_set_t old_cpuset;
@@ -94,7 +178,7 @@ static qos_class_t old_qos_class;
 static int old_qos_relative_priority;
 #endif
 
-static int ideal_core = 0;
+static int ideal_core = 2;
 void run_on_core(int core) { ideal_core = core; }
 
 benchmark_scope::benchmark_scope()
@@ -102,8 +186,21 @@ benchmark_scope::benchmark_scope()
 #ifdef _WIN32
     HANDLE thrd = GetCurrentThread();
     old_prio    = GetThreadPriority(thrd);
+    // printf("Setting realtime priority and affinity to core %d\n", ideal_core);
+    SetPriorityClass(GetCurrentProcess(), REALTIME_PRIORITY_CLASS);
     SetThreadPriority(thrd, THREAD_PRIORITY_HIGHEST);
     old_affmask = SetThreadAffinityMask(thrd, 1ull << ideal_core);
+
+    // printf("Creating spin thread on SMT sibling of core %d to keep it busy\n", ideal_core);
+    details::run_spin_thread_on_ht_sibling(ideal_core);
+
+    // printf("Setting timer resolution to 0.5ms\n");
+    NtSetTimerResolution =
+        (void (*)(ULONG, bool, PULONG))GetProcAddress(GetModuleHandleA("ntdll.dll"), "NtSetTimerResolution");
+    if (NtSetTimerResolution)
+    {
+        NtSetTimerResolution(5000, true, &oldresolution);
+    }
 #endif
 #ifdef __linux__
     sched_getaffinity(0, sizeof(old_cpuset), &old_cpuset);
@@ -126,6 +223,12 @@ benchmark_scope::~benchmark_scope()
     DisableThreadProfiling(thrd);
     SetThreadPriority(thrd, old_prio);
     SetThreadAffinityMask(thrd, old_affmask);
+
+    details::terminate_spin_thread();
+    if (NtSetTimerResolution)
+    {
+        NtSetTimerResolution(oldresolution, false, &oldresolution);
+    }
 #endif
 #ifdef __linux__
     sched_setaffinity(0, sizeof(old_cpuset), &old_cpuset);

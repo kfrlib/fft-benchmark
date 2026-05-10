@@ -287,8 +287,9 @@ static void run_t(unsigned out_rate, unsigned in_rate, unsigned length, bool pro
         std::chrono::nanoseconds time = bench_stop();
         measures.push_back(std::chrono::duration<double>(time).count());
     }
-    double median_s       = get_median(measures);
-    double minimum_s      = get_minimum(measures);
+    auto percentiles      = get_percentiles(measures);
+    double median_s       = percentiles.p50_median;
+    double minimum_s      = percentiles.p1;
     double median_factor  = static_cast<double>(length) / median_s;
     double minimum_factor = static_cast<double>(length) / minimum_s;
     if (progress)
@@ -426,11 +427,7 @@ int main(int argc, char** argv)
     json_string(srcname);
 
     constexpr std::pair<unsigned, unsigned> test_cases[] = {
-        { 48000, 44100 },
-        { 96000, 48000 },
-        { 96000, 44100 },
-        { 48000, 16000 },
-        { 40009, 19997 },
+        { 48000, 44100 }, { 96000, 48000 }, { 96000, 44100 }, { 48000, 16000 }, { 40009, 19997 },
     };
 
     if (performance)

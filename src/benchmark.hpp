@@ -35,8 +35,16 @@
 #endif
 #endif
 
+#if defined __clang__ || defined __GNUC__
+#define BENCH_INLINE inline __attribute__((always_inline))
+#elif defined(_MSC_VER)
+#define BENCH_INLINE __forceinline
+#else
+#define BENCH_INLINE inline
+#endif
+
 template <typename T>
-inline T* aligned_malloc(size_t size, size_t alignment = 64)
+BENCH_INLINE T* aligned_malloc(size_t size, size_t alignment = 64)
 {
     void* ptr = malloc(size * sizeof(T) + (alignment - 1) + sizeof(void*));
     if (ptr == NULL)
@@ -45,18 +53,20 @@ inline T* aligned_malloc(size_t size, size_t alignment = 64)
     ((void**)aligned_ptr)[-1] = ptr;
     return static_cast<T*>(aligned_ptr);
 }
-inline void aligned_free(void* aligned_ptr) { free(((void**)aligned_ptr)[-1]); }
+BENCH_INLINE void aligned_free(void* aligned_ptr) { free(((void**)aligned_ptr)[-1]); }
 
-template <typename T>
+template <typename T, size_t alignment = 64>
 struct aligned_allocator
 {
     using value_type = T;
-    aligned_allocator() noexcept {}
     template <typename U>
-    aligned_allocator(const aligned_allocator<U>&) noexcept
+    struct rebind { using other = aligned_allocator<U, alignment>; };
+    aligned_allocator() noexcept {}
+    template <typename U, size_t Al>
+    aligned_allocator(const aligned_allocator<U, Al>&) noexcept
     {
     }
-    T* allocate(size_t n) { return aligned_malloc<T>(n); }
+    T* allocate(size_t n) { return aligned_malloc<T>(n, alignment); }
     void deallocate(T* p, size_t) { aligned_free(p); }
     bool operator==(const aligned_allocator&) const { return true; }
     bool operator!=(const aligned_allocator&) const { return false; }
@@ -64,9 +74,9 @@ struct aligned_allocator
 
 void use_from_outside(const char volatile*);
 
-inline void dont_optimize(const void* in)
+BENCH_INLINE void dont_optimize(const void* in)
 {
-#ifdef __GNUC__
+#if defined __clang__ || __GNUC__
     asm volatile("" : : "g"(in) : "memory");
 #else
     use_from_outside(reinterpret_cast<const char volatile*>(in));
@@ -134,7 +144,7 @@ std::chrono::nanoseconds bench_stop();
 
 namespace details
 {
-inline void full_barrier()
+BENCH_INLINE void full_barrier()
 {
 #if defined(__x86_64__) || defined(_M_X64)
     _mm_lfence();
@@ -153,12 +163,12 @@ double get_qpc_scale();
 uint64_t get_qpc_current();
 extern double qpc_scale;
 } // namespace details
-inline std::chrono::nanoseconds os_time()
+BENCH_INLINE std::chrono::nanoseconds os_time()
 {
     return std::chrono::nanoseconds(static_cast<uint64_t>(details::get_qpc_current() * details::qpc_scale));
 }
 // in nanoseconds
-inline double os_time_resolution() { return details::get_qpc_scale(); }
+BENCH_INLINE double os_time_resolution() { return details::get_qpc_scale(); }
 
 #else
 
@@ -167,13 +177,13 @@ inline double os_time_resolution() { return details::get_qpc_scale(); }
 #include <time.h>
 #include <unistd.h>
 
-inline std::chrono::nanoseconds os_time()
+BENCH_INLINE std::chrono::nanoseconds os_time()
 {
     timespec time;
     clock_gettime(CLOCK_MONOTONIC, &time);
     return std::chrono::nanoseconds(time.tv_sec * 1000'000'000ull + time.tv_nsec);
 }
-inline double os_time_resolution()
+BENCH_INLINE double os_time_resolution()
 {
     timespec time;
     clock_getres(CLOCK_MONOTONIC, &time);
@@ -185,7 +195,7 @@ inline double os_time_resolution()
 namespace details
 {
 
-inline uint64_t rdtsc()
+BENCH_INLINE uint64_t rdtsc()
 {
 #if defined(__x86_64__) || defined(_M_X64)
     // lfence: execution serialization — drains the out-of-order engine so that
@@ -226,18 +236,18 @@ extern double tsc_scale;
 void calibrate_tsc();
 } // namespace details
 
-inline uint64_t tsc_time() { return details::rdtsc(); }
+BENCH_INLINE uint64_t tsc_time() { return details::rdtsc(); }
 
-inline double tsc_resolution() { return details::tsc_scale; }
+BENCH_INLINE double tsc_resolution() { return details::tsc_scale; }
 
 #if defined(USE_OS_TIME)
-inline void bench_start()
+BENCH_INLINE void bench_start()
 {
     details::full_barrier();
     details::start_time = os_time();
     details::full_barrier();
 }
-inline std::chrono::nanoseconds bench_stop()
+BENCH_INLINE std::chrono::nanoseconds bench_stop()
 {
     details::full_barrier();
     std::chrono::nanoseconds stop_time = os_time();
@@ -246,12 +256,12 @@ inline std::chrono::nanoseconds bench_stop()
 }
 #else
 
-inline void bench_start()
+BENCH_INLINE void bench_start()
 {
     // rdtsc() already contains lfence;read;lfence — no extra barriers needed.
     details::start_time = tsc_time();
 }
-inline std::chrono::nanoseconds bench_stop()
+BENCH_INLINE std::chrono::nanoseconds bench_stop()
 {
     // rdtsc() already contains lfence;read;lfence — no extra barriers needed.
     uint64_t stop_time = tsc_time();
@@ -275,15 +285,36 @@ static T get_minimum(const std::vector<T>& measures)
 }
 
 template <typename T>
-static T get_median(std::vector<T>& measures)
+struct Percentiles
+{
+    double p1;
+    double p50_median;
+};
+
+template <typename T>
+T sample_at(double pos, const std::vector<T>& measures)
+{
+    if (measures.empty())
+        return T();
+    double idx       = pos * (measures.size() - 1);
+    size_t idx_below = static_cast<size_t>(std::floor(idx));
+    size_t idx_above = static_cast<size_t>(std::ceil(idx));
+    if (idx_below == idx_above)
+        return measures[idx_below];
+    double weight_above = idx - idx_below;
+    double weight_below = 1.0 - weight_above;
+    return measures[idx_below] * weight_below + measures[idx_above] * weight_above;
+}
+
+template <typename T>
+static Percentiles<T> get_percentiles(std::vector<T>& measures)
 {
     std::sort(measures.begin(), measures.end());
-    const size_t middle = measures.size() / 2;
+    Percentiles<T> result;
 
-    if (measures.size() % 2 == 1)
-        return measures[middle];
-    else
-        return static_cast<T>((measures[middle - 1] + measures[middle]) / 2);
+    result.p50_median = sample_at(0.5, measures);
+    result.p1         = sample_at(0.01, measures);
+    return result;
 }
 
 #define PICK                                                                                                 \
