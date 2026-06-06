@@ -16,14 +16,13 @@
 #ifdef __linux__
 #include <pthread.h>
 #include <sched.h>
-#include <unistd.h>
 #include <sys/mman.h>
 #include <unistd.h>
 #endif
 #ifdef __APPLE__
 #include <pthread.h>
-#include <unistd.h>
 #include <sys/mman.h>
+#include <unistd.h>
 #endif
 
 namespace bm
@@ -38,7 +37,7 @@ static size_t page_size()
     GetSystemInfo(&si);
     return static_cast<size_t>(si.dwPageSize);
 #else
-    long ps = ::sysconf(_SC_PAGESIZE);
+    long ps = sysconf(_SC_PAGESIZE);
     if (ps <= 0)
     {
         fprintf(stderr, "sysconf(_SC_PAGESIZE) failed\n");
@@ -73,7 +72,7 @@ void* page_aligned_alloc(size_t size)
 
     return p;
 #else
-    void* p = ::mmap(nullptr, aligned, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    void* p = mmap(nullptr, aligned, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 
     if (p == MAP_FAILED)
     {
@@ -97,7 +96,7 @@ void page_aligned_free(void* ptr, size_t size)
     ::VirtualUnlock(ptr, aligned);
     ::VirtualFree(ptr, 0, MEM_RELEASE);
 #else
-    ::munmap(ptr, aligned);
+    munmap(ptr, aligned);
 #endif
 }
 
