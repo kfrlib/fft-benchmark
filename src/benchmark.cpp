@@ -18,9 +18,12 @@
 #include <sched.h>
 #include <unistd.h>
 #include <sys/mman.h>
+#include <unistd.h>
 #endif
 #ifdef __APPLE__
 #include <pthread.h>
+#include <unistd.h>
+#include <sys/mman.h>
 #endif
 
 namespace bm

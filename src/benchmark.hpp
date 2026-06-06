@@ -123,6 +123,12 @@ inline std::string trim(std::string s)
     return s;
 }
 
+template <typename T>
+constexpr inline const char* type_name = "float";
+
+template <>
+constexpr inline const char* type_name<double> = "double";
+
 inline std::string cpu_name()
 {
 #if defined(__x86_64__) || defined(_M_X64)
@@ -158,6 +164,15 @@ inline std::string cpu_name()
 #else
     return "(unknown)";
 #endif
+}
+
+inline std::string execfile(std::string command)
+{
+    size_t pos = command.find_last_of("/\\");
+    command    = command.substr(pos == std::string::npos ? 0 : pos + 1);
+    if (command.substr(command.size() - 4) == ".exe")
+        command = command.substr(0, command.size() - 4);
+    return command;
 }
 
 // defaults to 2 (2nd core if hyperthreading, 3rd core otherwise)

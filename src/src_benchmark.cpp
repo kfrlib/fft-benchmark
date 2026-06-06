@@ -11,6 +11,8 @@
 #include <cinttypes>
 #include <random>
 
+using namespace bm;
+
 #define NOMINMAX 1
 
 bool avx2only = false;

@@ -16,12 +16,6 @@ using namespace bm;
             return v2;                                                                                       \
     }
 
-template <typename T>
-constexpr inline const char* type_name = "float";
-
-template <>
-constexpr inline const char* type_name<double> = "double";
-
 template <size_t dims>
 using sizes_t = std::array<size_t, dims>;
 
@@ -115,15 +109,6 @@ inline std::vector<bool> to_vector_bool(std::string_view s)
         }
     }
     return result;
-}
-
-inline std::string execfile(std::string command)
-{
-    size_t pos = command.find_last_of("/\\");
-    command    = command.substr(pos == std::string::npos ? 0 : pos + 1);
-    if (command.substr(command.size() - 4) == ".exe")
-        command = command.substr(0, command.size() - 4);
-    return command;
 }
 
 extern bool avx2only;

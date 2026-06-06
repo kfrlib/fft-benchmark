@@ -93,17 +93,10 @@ endif ()
 message(STATUS "  Note: each library has its own license")
 
 function (add_benchmark NAME)
-    cmake_parse_arguments(LIB "FFT;SRC;OPEN" "" "SOURCES;LIBRARIES;INCLUDES;DEFINITIONS" ${ARGN})
+    cmake_parse_arguments(LIB "FFT;SRC" "LICENSE" "SOURCES;LIBRARIES;INCLUDES;DEFINITIONS" ${ARGN})
 
     if (NOT LIB_FFT AND NOT LIB_SRC)
         message(FATAL_ERROR "Either FFT or SRC must be specified for benchmark ${NAME}")
-    endif ()
-
-    if (OPEN AND NOT LIB_OPEN)
-        return()
-    endif ()
-    if (NOT OPEN AND LIB_OPEN)
-        return()
     endif ()
 
     if (LIB_FFT)
