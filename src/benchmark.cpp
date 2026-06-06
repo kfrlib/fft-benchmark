@@ -16,12 +16,87 @@
 #ifdef __linux__
 #include <pthread.h>
 #include <sched.h>
+#include <unistd.h>
+#include <sys/mman.h>
 #endif
 #ifdef __APPLE__
 #include <pthread.h>
 #endif
 
+namespace bm
+{
+
 void use_from_outside(const char volatile* in) { (void)in; }
+
+static size_t page_size()
+{
+#if defined(_WIN32)
+    SYSTEM_INFO si{};
+    GetSystemInfo(&si);
+    return static_cast<size_t>(si.dwPageSize);
+#else
+    long ps = ::sysconf(_SC_PAGESIZE);
+    if (ps <= 0)
+    {
+        fprintf(stderr, "sysconf(_SC_PAGESIZE) failed\n");
+        std::abort();
+    }
+    return static_cast<size_t>(ps);
+#endif
+}
+
+static inline size_t round_up_to_page(size_t size)
+{
+    const size_t ps = page_size();
+    return (size + ps - 1) & ~(ps - 1);
+}
+
+void* page_aligned_alloc(size_t size)
+{
+    if (size == 0)
+        return nullptr;
+    const size_t aligned = round_up_to_page(size);
+
+#if defined(_WIN32)
+    void* p = ::VirtualAlloc(nullptr, aligned, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+
+    ::VirtualLock(p, aligned); // prevent paging to disk, which would cause huge latency spikes
+
+    if (!p)
+    {
+        fprintf(stderr, "VirtualAlloc failed\n");
+        std::abort();
+    }
+
+    return p;
+#else
+    void* p = ::mmap(nullptr, aligned, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+
+    if (p == MAP_FAILED)
+    {
+        fprintf(stderr, "mmap failed\n");
+        std::abort();
+    }
+
+    return p;
+#endif
+}
+
+void page_aligned_free(void* ptr, size_t size)
+{
+    if (!ptr)
+        return;
+
+    const std::size_t aligned = round_up_to_page(size);
+
+#if defined(_WIN32)
+    (void)aligned;
+    ::VirtualUnlock(ptr, aligned);
+    ::VirtualFree(ptr, 0, MEM_RELEASE);
+#else
+    ::munmap(ptr, aligned);
+#endif
+}
 
 namespace details
 {
@@ -110,6 +185,9 @@ double tsc_scale = 0;
 
 void calibrate_tsc()
 {
+    if (tsc_scale != 0)
+        return;
+
 #if defined(__aarch64__)
     // On AArch64 the virtual counter CNTVCT_EL0 is driven by a fixed-frequency
     // oscillator whose rate is published in CNTFRQ_EL0. No measurement loop is
@@ -191,8 +269,10 @@ benchmark_scope::benchmark_scope()
     SetThreadPriority(thrd, THREAD_PRIORITY_HIGHEST);
     old_affmask = SetThreadAffinityMask(thrd, 1ull << ideal_core);
 
-    // printf("Creating spin thread on SMT sibling of core %d to keep it busy\n", ideal_core);
+#if 0
+    printf("Creating spin thread on SMT sibling of core %d to keep it busy\n", ideal_core);
     details::run_spin_thread_on_ht_sibling(ideal_core);
+#endif
 
     // printf("Setting timer resolution to 0.5ms\n");
     NtSetTimerResolution =
@@ -237,3 +317,5 @@ benchmark_scope::~benchmark_scope()
     pthread_set_qos_class_self_np(old_qos_class, old_qos_relative_priority);
 #endif
 }
+
+} // namespace bm

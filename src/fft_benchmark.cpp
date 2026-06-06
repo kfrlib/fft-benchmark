@@ -82,14 +82,19 @@ constexpr inline const char* inplace_str(bool inplace)
 #endif
 
 template <typename real>
-BENCH_INLINE std::chrono::nanoseconds measure_fft(fft_impl<real>* fft, real* out, const real* in,
-                                                  size_t fft_size, size_t inner_iterations)
+BENCH_INLINE void preheat_fft(fft_impl<real>* fft, real* out, const real* in, size_t inner_iterations)
 {
     for (int i = 0; i < inner_iterations; ++i)
     {
         fft->execute(out, in);
         dont_optimize(out);
     }
+}
+
+template <typename real>
+BENCH_INLINE std::chrono::nanoseconds measure_fft(fft_impl<real>* fft, real* out, const real* in,
+                                                  size_t fft_size, size_t inner_iterations)
+{
 #ifdef SYNTHETIC_WORKLOAD
     uint64_t iter = std::log2(fft_size) * fft_size / 10;
 #endif
@@ -214,7 +219,7 @@ struct fft_benchmark_runner
     }
 
     static void benchmark(std::vector<size_t> sizes, bool is_complex, bool inverse, bool inplace,
-                          bool progress, uint32_t benchmark_duration = 10000)
+                          bool progress, double benchmark_duration = 2)
     {
         json_open_object();
         json_key("size");
@@ -254,9 +259,10 @@ struct fft_benchmark_runner
             return;
         }
 
-        size_t size = product(sizes);
-        real* in    = aligned_malloc<real>(size * 4 + 2);
-        real* out   = aligned_malloc<real>(size * 4 + 2);
+        size_t size            = product(sizes);
+        size_t allocation_size = size * 4 + 2;
+        real* in               = aligned_malloc<real>(allocation_size);
+        real* out              = aligned_malloc<real>(allocation_size);
         fill_random(in, size * 2);
         if (inplace)
             std::copy(in, in + size * 2, out);
@@ -266,32 +272,32 @@ struct fft_benchmark_runner
 
         size_t inner_iterations = size <= 256 ? 100 : size <= 262144 ? 10 : 1;
 
+        std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
+        while (std::chrono::steady_clock::now() - start_time <
+               std::chrono::duration<double>(benchmark_duration / 4))
         {
-            benchmark_scope scope;
-            for (;;)
+            preheat_fft(fft.get(), out, inplace ? out : in, inner_iterations);
+        }
+
+        for (;;)
+        {
+            std::chrono::nanoseconds run_duration;
+            run_duration = measure_fft<real>(fft.get(), out, inplace ? out : in, size, inner_iterations);
+
+            total_duration += run_duration;
+            total_calls += inner_iterations;
+            batch_times.push_back(std::chrono::duration<double>(run_duration).count() / inner_iterations);
+
+            fill_random(in, size * 2);
+            if (inplace)
+                std::copy(in, in + size * 2, out);
+
+            if (total_calls / inner_iterations >= 50)
             {
-                std::chrono::nanoseconds run_duration;
-                if (inner_iterations == 100)
-                    run_duration = measure_fft<real>(fft.get(), out, inplace ? out : in, size, 100);
-                else
-                    run_duration =
-                        measure_fft<real>(fft.get(), out, inplace ? out : in, size, inner_iterations);
-
-                total_duration += run_duration;
-                total_calls += inner_iterations;
-                batch_times.push_back(std::chrono::duration<double>(run_duration).count() / inner_iterations);
-
-                fill_random(in, size * 2);
-                if (inplace)
-                    std::copy(in, in + size * 2, out);
-
-                if (total_calls / inner_iterations >= 50)
-                {
-                    if (total_duration >= std::chrono::milliseconds(benchmark_duration))
-                        break;
-                }
+                if (total_duration >= std::chrono::duration<double>(benchmark_duration))
+                    break;
             }
-        } // benchmark_scope
+        }
 
         [[maybe_unused]] auto times                 = get_percentiles(batch_times);
         [[maybe_unused]] double opspersecond_median = 1.0 / times.p50_median;
@@ -299,22 +305,22 @@ struct fft_benchmark_runner
 
         double time_value = times.p1;
         // FFTW convention: complex FFT costs 5*N*log2(N) FLOP, real FFT half that.
-        const double mflops =
+        const double gflops =
             ((is_complex ? 5.0 : 2.5) * size * std::log((double)size) / (std::log(2.0) * time_value)) /
-            1000'000.0;
+            1'000'000'000.0;
 
         if (progress)
         {
             char unit    = times.p1 < 1e-6 ? 'n' : 'u';
             double scale = unit == 'n' ? 1e9 : 1e6;
-            printf("%-6s %-7s %-9s %-10s %11s %12.2f | %12.2f%cs%12.2f | %12.2f%cs%12.2f | %7" PRIu64 "\n",
+            printf("%-6s %-7s %-9s %-10s %11s %10.3f | %12.2f%cs%12.2f | %12.2f%cs%12.2f | %7" PRIu64 "\n",
                    type_name<real>, is_complex_str(is_complex), inverse_str(inverse), inplace_str(inplace),
-                   sizes_to_string(sizes).c_str(), mflops, times.p1 * scale, unit, opspersecond_best,
+                   sizes_to_string(sizes).c_str(), gflops, times.p1 * scale, unit, opspersecond_best,
                    times.p50_median * scale, unit, opspersecond_median, total_calls);
         }
 
-        json_key("mflops");
-        json_number(mflops);
+        json_key("gflops");
+        json_number(gflops);
         json_key("best_time");
         json_number(times.p1 * 1'000'000);
         json_key("median_time");
@@ -325,23 +331,24 @@ struct fft_benchmark_runner
         {
             fflush(stdout);
         }
-        aligned_free(in);
-        aligned_free(out);
+        aligned_free(in, allocation_size);
+        aligned_free(out, allocation_size);
     }
 };
 
 static std::string outname;
-static bool progress = true;
-static bool banner   = true;
-static bool accuracy = false;
-bool avx2only        = false;
+static bool progress   = true;
+static bool banner     = true;
+static bool accuracy   = false;
+static double duration = 2.0;
+bool avx2only          = false;
 static std::vector<std::vector<size_t>> sizes;
-static std::vector<bool> is_complex_list{ true, false };
-static std::vector<bool> inverse_list{ false, true };
-static std::vector<bool> inplace_list{ false, true };
+static std::vector<bool> is_complex_list{ true };
+static std::vector<bool> inverse_list{ false };
+static std::vector<bool> inplace_list{ true };
 
 template <typename real>
-static void run_t(const std::vector<size_t>& sizes, bool progress)
+static void run_t(const std::vector<size_t>& sizes)
 {
     for (bool complex : is_complex_list)
     {
@@ -349,16 +356,17 @@ static void run_t(const std::vector<size_t>& sizes, bool progress)
         {
             for (bool inplace : inplace_list)
             {
-                fft_benchmark_runner<real>::benchmark(sizes, complex, inverse, inplace, progress);
+                fft_benchmark_runner<real>::benchmark(sizes, complex, inverse, inplace, progress, duration);
             }
         }
     }
 }
 
-static void run(const std::vector<size_t>& sizes, bool progress)
+static void run(const std::vector<size_t>& sizes)
 {
-    run_t<float>(sizes, progress);
-    run_t<double>(sizes, progress);
+    benchmark_scope scope;
+    run_t<float>(sizes);
+    run_t<double>(sizes);
 }
 
 int main(int argc, char** argv)
@@ -421,6 +429,14 @@ int main(int argc, char** argv)
             if (i + 1 < argc)
             {
                 inverse_list = to_vector_bool(argv[i + 1]);
+                ++i;
+            }
+        }
+        else if (argv[i] == "--duration"sv)
+        {
+            if (i + 1 < argc)
+            {
+                duration = std::stod(argv[i + 1]);
                 ++i;
             }
         }
@@ -515,8 +531,8 @@ int main(int argc, char** argv)
 
     if (progress)
     {
-        printf("%-6s %-7s %-9s %-10s %11s %12s | %14s%12s | %14s%12s | %7s\n", "data", "type", "direction",
-               "buffer", "size", "mflops", "best time", "(ops/sec)", "med. time", "(ops/sec)", "calls");
+        printf("%-6s %-7s %-9s %-10s %11s %10s | %14s%12s | %14s%12s | %7s\n", "data", "type", "direction",
+               "buffer", "size", "gflops", "best time", "(ops/sec)", "med. time", "(ops/sec)", "calls");
     }
 
     for (auto size : sizes)
@@ -528,7 +544,7 @@ int main(int argc, char** argv)
         }
         else
         {
-            run(size, progress);
+            run(size);
         }
     }
 

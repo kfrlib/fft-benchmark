@@ -36,18 +36,11 @@ jobs:
           curl -o "$TMP_DIR/kfr.zip" -L "https://github.com/kfrlib/kfr/releases/download/$KFR_VER/kfr-linux-x86_64.zip"
           unzip "$TMP_DIR/kfr.zip" -d "${TMP_DIR}/kfr"
           ls -la "${TMP_DIR}/kfr/kfr-linux-x86_64"
-      - name: Install IPP & MKL binaries
-        run: |
-          wget -qO- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB | sudo gpg --dearmor -o /usr/share/keyrings/intel-oneapi-archive-keyring.gpg
-          echo "deb [signed-by=/usr/share/keyrings/intel-oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" | sudo tee /etc/apt/sources.list.d/oneAPI.list
-          sudo apt-get update
-          sudo apt-get install -y intel-oneapi-ipp intel-oneapi-ipp-devel
-          sudo apt-get install -y intel-oneapi-mkl intel-oneapi-mkl-devel
       - name: Build benchmark
         env:
           TMP_DIR: ${{ runner.temp }}
         run: |
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=${TMP_DIR}/kfr/kfr-linux-x86_64/lib/cmake;${{ github.workspace }}/vcpkg_installed/x64-linux/share;/opt/intel/oneapi/ipp/latest/lib/cmake;/opt/intel/oneapi/mkl/latest/lib/cmake" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=${TMP_DIR}/kfr/kfr-linux-x86_64/lib/cmake;${{ github.workspace }}/vcpkg_installed/x64-linux/share" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DOPEN=ON
           ninja -C build
           ls -la build
           file build/fft_benchmark_*
@@ -66,13 +59,13 @@ jobs:
       - name: Binaries
         uses: actions/upload-artifact@v4
         with:
-          name: linux-x86_64
+          name: linux-x86_64-open
           path: ${{ github.workspace }}/dist
       - name: Upload buildtrees
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: vcpkg-buildtrees
+          name: vcpkg-buildtrees-linux-x86_64
           retention-days: 10
           path: |
             ${{ github.workspace }}/vcpkg/buildtrees
@@ -116,7 +109,7 @@ jobs:
         env:
           TMP_DIR: ${{ runner.temp }}
         run: |
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=${TMP_DIR}/kfr/kfr-linux-arm64/lib/cmake;${{ github.workspace }}/vcpkg_installed/arm64-linux/share" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DVCPKG_TARGET_TRIPLET=arm64-linux -DVCPKG_HOST_TRIPLET=arm64-linux
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=${TMP_DIR}/kfr/kfr-linux-arm64/lib/cmake;${{ github.workspace }}/vcpkg_installed/arm64-linux/share" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DVCPKG_TARGET_TRIPLET=arm64-linux -DVCPKG_HOST_TRIPLET=arm64-linux -DOPEN=ON
           ninja -C build
           ls -la build
           file build/fft_benchmark_*
@@ -135,13 +128,13 @@ jobs:
       - name: Binaries
         uses: actions/upload-artifact@v4
         with:
-          name: linux-arm64
+          name: linux-arm64-open
           path: ${{ github.workspace }}/dist
       - name: Upload buildtrees
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: vcpkg-buildtrees-arm64
+          name: vcpkg-buildtrees-linux-arm64
           retention-days: 10
           path: |
             ${{ github.workspace }}/vcpkg/buildtrees
@@ -185,7 +178,7 @@ jobs:
         env:
           TMP_DIR: ${{ runner.temp }}
         run: |
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=${TMP_DIR}/kfr/kfr-macos-arm64/lib/cmake;${{ github.workspace }}/vcpkg_installed/arm64-osx/share"
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=${TMP_DIR}/kfr/kfr-macos-arm64/lib/cmake;${{ github.workspace }}/vcpkg_installed/arm64-osx/share" -DOPEN=ON
           ninja -C build
           ls -la build
           file build/fft_benchmark_*
@@ -204,7 +197,7 @@ jobs:
       - name: Binaries
         uses: actions/upload-artifact@v4
         with:
-          name: macos-arm64
+          name: macos-arm64-open
           path: ${{ github.workspace }}/dist
       - name: Upload buildtrees
         if: failure()
@@ -222,14 +215,6 @@ jobs:
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\.vcpkg-cache
       VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}\.vcpkg-cache,readwrite
     steps:
-      - name: Install IPP & MKL
-        shell: cmd
-        run: |
-          curl.exe --output %TEMP%\webimage.exe --url "https://registrationcenter-download.intel.com/akdlm/IRC_NAS/1f18901e-877d-469d-a41a-a10f11b39336/intel-oneapi-base-toolkit-2025.3.0.372_offline.exe" --retry 5 --retry-delay 5
-          start /b /wait %TEMP%\webimage.exe -s -x -f webimage_extracted --log extract.log
-          del %TEMP%\webimage.exe
-          webimage_extracted\bootstrapper.exe -s --action install --components=intel.oneapi.win.ipp.devel:intel.oneapi.win.mkl.devel --eula=accept -p=NEED_VS2019_INTEGRATION=0 -p=NEED_VS2022_INTEGRATION=0 --log-dir=.
-          rd /s/q "webimage_extracted"
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -260,7 +245,7 @@ jobs:
         run: |
           ls "$env:VCPKG_DEFAULT_BINARY_CACHE"
           & 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\Launch-VsDevShell.ps1' -Arch amd64 -HostArch amd64
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=$env:TMP_DIR/kfr/kfr-windows-x86_64/lib/cmake;${{ github.workspace }}/vcpkg_installed/x64-windows-static-md/share;C:/Program Files (x86)/Intel/oneAPI/ipp/latest/lib/cmake;C:/Program Files (x86)/Intel/oneAPI/mkl/latest/lib/cmake" -DCMAKE_C_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" -DCMAKE_LINKER="C:/Program Files/LLVM/bin/lld-link.exe"
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=$env:TMP_DIR/kfr/kfr-windows-x86_64/lib/cmake;${{ github.workspace }}/vcpkg_installed/x64-windows-static-md/share" -DCMAKE_C_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" -DCMAKE_LINKER="C:/Program Files/LLVM/bin/lld-link.exe" -DOPEN=ON
           ninja -C build
           New-Item -ItemType Directory -Force -Path "${{ github.workspace }}\dist"
           Copy-Item build\fft_benchmark_*.exe "${{ github.workspace }}\dist"
@@ -277,13 +262,13 @@ jobs:
       - name: Binaries
         uses: actions/upload-artifact@v4
         with:
-          name: windows-x86_64
+          name: windows-x86_64-open
           path: ${{ github.workspace }}/dist
       - name: Upload buildtrees
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: vcpkg-buildtrees-windows
+          name: vcpkg-buildtrees-windows-x86_64
           retention-days: 10
           path: |
             ${{ github.workspace }}\vcpkg\buildtrees

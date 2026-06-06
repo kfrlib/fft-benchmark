@@ -1,5 +1,7 @@
 if (KFR_SRC_DIR)
 
+    add_compile_definitions(KFR_NG=1)
+
     set(CMAKE_CXX_STANDARD 20)
     set(CMAKE_CXX_EXTENSIONS ON)
 

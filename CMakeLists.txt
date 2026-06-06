@@ -82,11 +82,28 @@ set(FFT_SIZES
     524288
     1048576)
 
+option(OPEN "Only include open-source libraries" ON)
+
+if (OPEN)
+    message(STATUS "OPEN is ON: compiling open-source libraries only (closed-source libraries excluded)")
+    message(STATUS "  Resulting package is GPLv3-compatible")
+else ()
+    message(STATUS "OPEN is OFF: compiling closed-source libraries only (open-source libraries excluded)")
+endif ()
+message(STATUS "  Note: each library has its own license")
+
 function (add_benchmark NAME)
-    cmake_parse_arguments(LIB "FFT;SRC" "" "SOURCES;LIBRARIES;INCLUDES;DEFINITIONS" ${ARGN})
+    cmake_parse_arguments(LIB "FFT;SRC;OPEN" "" "SOURCES;LIBRARIES;INCLUDES;DEFINITIONS" ${ARGN})
 
     if (NOT LIB_FFT AND NOT LIB_SRC)
         message(FATAL_ERROR "Either FFT or SRC must be specified for benchmark ${NAME}")
+    endif ()
+
+    if (OPEN AND NOT LIB_OPEN)
+        return()
+    endif ()
+    if (NOT OPEN AND LIB_OPEN)
+        return()
     endif ()
 
     if (LIB_FFT)

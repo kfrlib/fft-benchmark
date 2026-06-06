@@ -1,0 +1,115 @@
+name: Build
+on: push
+jobs:
+  linux-x86_64:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Packages
+        run: |
+          sudo apt-get update && sudo apt-get install -y wget cmake gnupg2 ninja-build build-essential clang
+      - name: Install IPP & MKL binaries
+        run: |
+          wget -qO- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB | sudo gpg --dearmor -o /usr/share/keyrings/intel-oneapi-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/intel-oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" | sudo tee /etc/apt/sources.list.d/oneAPI.list
+          sudo apt-get update
+          sudo apt-get install -y intel-oneapi-ipp intel-oneapi-ipp-devel
+          sudo apt-get install -y intel-oneapi-mkl intel-oneapi-mkl-devel
+      - name: Build benchmark
+        run: |
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=/opt/intel/oneapi/ipp/latest/lib/cmake;/opt/intel/oneapi/mkl/latest/lib/cmake" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DOPEN=OFF
+          ninja -C build
+          ls -la build
+          file build/fft_benchmark_*
+          mkdir -p "${{ github.workspace }}/dist"
+          cp build/fft_benchmark_* "${{ github.workspace }}/dist"
+      - name: Verify benchmarks
+        # NOTE: The printed performance numbers are not meaningful here.
+        # CI runners are virtualized and subject to significant timing noise.
+        # This step only verifies that the compiled binaries start and run without errors.
+        run: |
+          echo "NOTE: Performance numbers below are not meaningful - CI runners are virtualized and subject to significant timing noise. This step only verifies that the compiled binaries start and run without errors."
+          for bin in build/fft_benchmark_*; do
+            echo "=== $bin ==="
+            "$bin" --no-banner --complex y --inverse n --inplace n 4096
+          done
+      - name: Binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-x86_64-proprietary
+          path: ${{ github.workspace }}/dist
+
+  macos-arm64:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Packages
+        run: |
+          brew install cmake ninja
+      - name: Build benchmark
+        run: |
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja -DOPEN=OFF
+          ninja -C build
+          ls -la build
+          file build/fft_benchmark_*
+          mkdir -p "${{ github.workspace }}/dist"
+          cp build/fft_benchmark_* "${{ github.workspace }}/dist"
+      - name: Verify benchmarks
+        # NOTE: The printed performance numbers are not meaningful here.
+        # CI runners are virtualized and subject to significant timing noise.
+        # This step only verifies that the compiled binaries start and run without errors.
+        run: |
+          echo "NOTE: Performance numbers below are not meaningful - CI runners are virtualized and subject to significant timing noise. This step only verifies that the compiled binaries start and run without errors."
+          for bin in build/fft_benchmark_*; do
+            echo "=== $bin ==="
+            "$bin" --no-banner --complex y --inverse n --inplace n 4096
+          done
+      - name: Binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm64-proprietary
+          path: ${{ github.workspace }}/dist
+
+  windows-x86_64:
+    runs-on: windows-latest
+    steps:
+      - name: Install IPP & MKL
+        shell: cmd
+        run: |
+          curl.exe --output %TEMP%\webimage.exe --url "https://registrationcenter-download.intel.com/akdlm/IRC_NAS/1f18901e-877d-469d-a41a-a10f11b39336/intel-oneapi-base-toolkit-2025.3.0.372_offline.exe" --retry 5 --retry-delay 5
+          start /b /wait %TEMP%\webimage.exe -s -x -f webimage_extracted --log extract.log
+          del %TEMP%\webimage.exe
+          webimage_extracted\bootstrapper.exe -s --action install --components=intel.oneapi.win.ipp.devel:intel.oneapi.win.mkl.devel --eula=accept -p=NEED_VS2019_INTEGRATION=0 -p=NEED_VS2022_INTEGRATION=0 --log-dir=.
+          rd /s/q "webimage_extracted"
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Build benchmark
+        run: |
+          & 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\Launch-VsDevShell.ps1' -Arch amd64 -HostArch amd64
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DCMAKE_PREFIX_PATH=C:/Program Files (x86)/Intel/oneAPI/ipp/latest/lib/cmake;C:/Program Files (x86)/Intel/oneAPI/mkl/latest/lib/cmake" -DCMAKE_C_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" -DCMAKE_LINKER="C:/Program Files/LLVM/bin/lld-link.exe" -DOPEN=OFF
+          ninja -C build
+          New-Item -ItemType Directory -Force -Path "${{ github.workspace }}\dist"
+          Copy-Item build\fft_benchmark_*.exe "${{ github.workspace }}\dist"
+      - name: Verify benchmarks
+        # NOTE: The printed performance numbers are not meaningful here.
+        # CI runners are virtualized and subject to significant timing noise.
+        # This step only verifies that the compiled binaries start and run without errors.
+        run: |
+          Write-Host "NOTE: Performance numbers below are not meaningful - CI runners are virtualized and subject to significant timing noise. This step only verifies that the compiled binaries start and run without errors."
+          Get-ChildItem build\fft_benchmark_*.exe | ForEach-Object {
+            Write-Host "=== $($_.Name) ==="
+            & $_.FullName --no-banner --complex y --inverse n --inplace n 4096
+          }
+      - name: Binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x86_64-proprietary
+          path: ${{ github.workspace }}/dist

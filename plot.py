@@ -41,7 +41,7 @@ def plot(data, ticks, labels, title, topy, file=None):
     x = None
     for d, s, l in zip(data, styles, labels):
         ax.set_xlabel('size')
-        ax.set_ylabel('mflops')
+        ax.set_ylabel('gflops')
         x = np.linspace(0, len(d), len(d), False)
         ax.plot(x, d, linewidth=1.6, label=l, **s)
 
@@ -86,11 +86,11 @@ for data in ['float', 'double']:
             print(f"Processing data type: {data}, type: {type}")
             filtered_results = [x for x in all_results if x['data'] == data and x['type'] == type]
 
-            # Find the maximum MFLOPS value for scaling the y-axis
-            mflops_max = max(
-                x for x in [x.get('mflops') for x in filtered_results] if x is not None
+            # Find the maximum GFLOPS value for scaling the y-axis
+            gflops_max = max(
+                x for x in [x.get('gflops') for x in filtered_results] if x is not None
             )
-            topy = math.ceil(mflops_max / 10000.0) * 10000.0
+            topy = math.ceil(gflops_max / 10.0) * 10.0
 
             # Iterate over FFT directions and buffer types
             for direction in ['forward', 'inverse']:
@@ -105,7 +105,7 @@ for data in ['float', 'double']:
                         if x['data'] == data and x['type'] == type and x['direction'] == direction and x['buffer'] == buffer
                     ]
                     values = [
-                        [x.get('mflops') for x in r['performance']
+                        [x.get('gflops') for x in r['performance']
                         if x['data'] == data and x['type'] == type and x['direction'] == direction and x['buffer'] == buffer]
                         for r in results
                     ]

@@ -29,7 +29,7 @@ public:
     PICK;
 
     using InterleavedSetup = pick_t<vDSP_DFT_Interleaved_Setup, vDSP_DFT_Interleaved_SetupD>;
-    using ZopSetup         = pick_t<vDSP_DFT_Setup,             vDSP_DFT_SetupD>;
+    using ZopSetup         = pick_t<vDSP_DFT_Setup, vDSP_DFT_SetupD>;
 
     fft_implementation(sizes_t<1> sizes) : N(sizes[0])
     {
@@ -38,10 +38,10 @@ public:
         // Try the interleaved API first (works up to N=4096)
         if constexpr (sizeof(real) == 4)
             isetup = vDSP_DFT_Interleaved_CreateSetup(nullptr, static_cast<vDSP_Length>(N), dir,
-                                                       vDSP_DFT_Interleaved_ComplextoComplex);
+                                                      vDSP_DFT_Interleaved_ComplextoComplex);
         else
             isetup = vDSP_DFT_Interleaved_CreateSetupD(nullptr, static_cast<vDSP_Length>(N), dir,
-                                                        vDSP_DFT_Interleaved_ComplextoComplex);
+                                                       vDSP_DFT_Interleaved_ComplextoComplex);
 
         if (!isetup)
         {
@@ -71,20 +71,18 @@ public:
         {
             // Direct interleaved path — zero-copy
             if constexpr (sizeof(real) == 4)
-                vDSP_DFT_Interleaved_Execute(isetup,
-                    reinterpret_cast<const DSPComplex*>(in),
-                    reinterpret_cast<DSPComplex*>(out));
+                vDSP_DFT_Interleaved_Execute(isetup, reinterpret_cast<const DSPComplex*>(in),
+                                             reinterpret_cast<DSPComplex*>(out));
             else
-                vDSP_DFT_Interleaved_ExecuteD(isetup,
-                    reinterpret_cast<const DSPDoubleComplex*>(in),
-                    reinterpret_cast<DSPDoubleComplex*>(out));
+                vDSP_DFT_Interleaved_ExecuteD(isetup, reinterpret_cast<const DSPDoubleComplex*>(in),
+                                              reinterpret_cast<DSPDoubleComplex*>(out));
         }
         else
         {
             // Split-complex path: deinterleave → DFT → reinterleave
             if constexpr (sizeof(real) == 4)
             {
-                DSPSplitComplex si = { split_re_in,  split_im_in  };
+                DSPSplitComplex si = { split_re_in, split_im_in };
                 DSPSplitComplex so = { split_re_out, split_im_out };
                 vDSP_ctoz(reinterpret_cast<const DSPComplex*>(in), 2, &si, 1, N);
                 vDSP_DFT_Execute(zsetup, split_re_in, split_im_in, split_re_out, split_im_out);
@@ -92,7 +90,7 @@ public:
             }
             else
             {
-                DSPDoubleSplitComplex si = { split_re_in,  split_im_in  };
+                DSPDoubleSplitComplex si = { split_re_in, split_im_in };
                 DSPDoubleSplitComplex so = { split_re_out, split_im_out };
                 vDSP_ctozD(reinterpret_cast<const DSPDoubleComplex*>(in), 2, &si, 1, N);
                 vDSP_DFT_ExecuteD(zsetup, split_re_in, split_im_in, split_re_out, split_im_out);
@@ -116,21 +114,21 @@ public:
                 vDSP_DFT_DestroySetup(zsetup);
             else
                 vDSP_DFT_DestroySetupD(zsetup);
-            aligned_free(split_re_in);
-            aligned_free(split_im_in);
-            aligned_free(split_re_out);
-            aligned_free(split_im_out);
+            aligned_free(split_re_in, N);
+            aligned_free(split_im_in, N);
+            aligned_free(split_re_out, N);
+            aligned_free(split_im_out, N);
         }
     }
 
 private:
     size_t N;
-    InterleavedSetup isetup       = nullptr;
-    ZopSetup         zsetup       = nullptr;
-    real*            split_re_in  = nullptr;
-    real*            split_im_in  = nullptr;
-    real*            split_re_out = nullptr;
-    real*            split_im_out = nullptr;
+    InterleavedSetup isetup = nullptr;
+    ZopSetup zsetup         = nullptr;
+    real* split_re_in       = nullptr;
+    real* split_im_in       = nullptr;
+    real* split_re_out      = nullptr;
+    real* split_im_out      = nullptr;
 };
 
 // 1D real-to-complex (forward) DFT via vDSP_DFT_zrop_CreateSetup.
@@ -184,8 +182,8 @@ public:
 
             // Repack to FFTW-style N/2+1 interleaved complex:
             //   [DC_re, 0, bin1_re, bin1_im, ..., Nyq_re, 0]
-            out[0] = Or[0];
-            out[1] = 0.0f;
+            out[0]             = Or[0];
+            out[1]             = 0.0f;
             DSPSplitComplex so = { Or + 1, Oi + 1 };
             vDSP_ztoc(&so, 1, reinterpret_cast<DSPComplex*>(out + 2), 2, N / 2 - 1);
             out[N]     = Oi[0];
@@ -201,8 +199,8 @@ public:
             vDSP_vsmulD(Or, 1, &half, Or, 1, N / 2);
             vDSP_vsmulD(Oi, 1, &half, Oi, 1, N / 2);
 
-            out[0] = Or[0];
-            out[1] = 0.0;
+            out[0]                   = Or[0];
+            out[1]                   = 0.0;
             DSPDoubleSplitComplex so = { Or + 1, Oi + 1 };
             vDSP_ztocD(&so, 1, reinterpret_cast<DSPDoubleComplex*>(out + 2), 2, N / 2 - 1);
             out[N]     = Oi[0];
@@ -218,13 +216,15 @@ public:
                 vDSP_DFT_DestroySetup(setup);
             else
                 vDSP_DFT_DestroySetupD(setup);
-            aligned_free(Ir); aligned_free(Ii);
-            aligned_free(Or); aligned_free(Oi);
+            aligned_free(Ir, N / 2);
+            aligned_free(Ii, N / 2);
+            aligned_free(Or, N / 2);
+            aligned_free(Oi, N / 2);
         }
     }
 
 private:
-    size_t   N;
+    size_t N;
     ZropSetup setup = nullptr;
     real *Ir = nullptr, *Ii = nullptr, *Or = nullptr, *Oi = nullptr;
 };
@@ -266,8 +266,8 @@ public:
         //   Ir[k] = in[2k], Ii[k] = in[2k+1]  for k=1..N/2-1
         if constexpr (sizeof(real) == 4)
         {
-            Ir[0] = in[0];
-            Ii[0] = in[N];
+            Ir[0]              = in[0];
+            Ii[0]              = in[N];
             DSPSplitComplex si = { Ir + 1, Ii + 1 };
             vDSP_ctoz(reinterpret_cast<const DSPComplex*>(in + 2), 2, &si, 1, N / 2 - 1);
             vDSP_DFT_Execute(setup, Ir, Ii, Or, Oi);
@@ -278,8 +278,8 @@ public:
         }
         else
         {
-            Ir[0] = in[0];
-            Ii[0] = in[N];
+            Ir[0]                    = in[0];
+            Ii[0]                    = in[N];
             DSPDoubleSplitComplex si = { Ir + 1, Ii + 1 };
             vDSP_ctozD(reinterpret_cast<const DSPDoubleComplex*>(in + 2), 2, &si, 1, N / 2 - 1);
             vDSP_DFT_ExecuteD(setup, Ir, Ii, Or, Oi);
@@ -297,13 +297,15 @@ public:
                 vDSP_DFT_DestroySetup(setup);
             else
                 vDSP_DFT_DestroySetupD(setup);
-            aligned_free(Ir); aligned_free(Ii);
-            aligned_free(Or); aligned_free(Oi);
+            aligned_free(Ir, N / 2);
+            aligned_free(Ii, N / 2);
+            aligned_free(Or, N / 2);
+            aligned_free(Oi, N / 2);
         }
     }
 
 private:
-    size_t   N;
+    size_t N;
     ZropSetup setup = nullptr;
     real *Ir = nullptr, *Ii = nullptr, *Or = nullptr, *Oi = nullptr;
 };
@@ -312,7 +314,11 @@ private:
 template <typename Impl, typename real>
 static fft_impl_ptr<real> make_if_valid(Impl* impl)
 {
-    if (!impl->valid_setup()) { delete impl; return nullptr; }
+    if (!impl->valid_setup())
+    {
+        delete impl;
+        return nullptr;
+    }
     return fft_impl_ptr<real>(impl);
 }
 
@@ -327,9 +333,11 @@ fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, bool is_complex, 
     {
         // Complex DFT: interleaved API (≤4096) with zop fallback
         using F = fft_implementation<1, real, true, false, false>;
-        using I = fft_implementation<1, real, true, true,  false>;
-        if (invert) return make_if_valid<I, real>(new I({ N }));
-        else        return make_if_valid<F, real>(new F({ N }));
+        using I = fft_implementation<1, real, true, true, false>;
+        if (invert)
+            return make_if_valid<I, real>(new I({ N }));
+        else
+            return make_if_valid<F, real>(new F({ N }));
     }
     else
     {
@@ -352,5 +360,5 @@ fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, bool is_complex, 
     }
 }
 
-template fft_impl_ptr<float>  fft_create<float> (const std::vector<size_t>&, bool, bool, bool);
+template fft_impl_ptr<float> fft_create<float>(const std::vector<size_t>&, bool, bool, bool);
 template fft_impl_ptr<double> fft_create<double>(const std::vector<size_t>&, bool, bool, bool);

@@ -2,6 +2,132 @@
 
 #include "benchmark.hpp"
 
+using namespace bm;
+
+#define PICK                                                                                                 \
+    template <typename T1, typename T2>                                                                      \
+    using pick_t = std::conditional_t<sizeof(real) == 4, T1, T2>;                                            \
+    template <typename T1, typename T2>                                                                      \
+    static constexpr auto pick(T1 v1, T2 v2)                                                                 \
+    {                                                                                                        \
+        if constexpr (sizeof(real) == 4)                                                                     \
+            return v1;                                                                                       \
+        else                                                                                                 \
+            return v2;                                                                                       \
+    }
+
+template <typename T>
+constexpr inline const char* type_name = "float";
+
+template <>
+constexpr inline const char* type_name<double> = "double";
+
+template <size_t dims>
+using sizes_t = std::array<size_t, dims>;
+
+template <typename real>
+void fill_random(real* in, size_t size)
+{
+    for (size_t i = 0; i < size; i++)
+        in[i] = static_cast<real>(((double)rand() / RAND_MAX) * 2.0 - 1.0);
+}
+
+template <typename real>
+static double rms(const real* a, const double* ref, size_t size)
+{
+    double sum = 0;
+    for (size_t i = 0; i < size; i++)
+    {
+        double diff = a[i] - ref[i];
+        sum += diff * diff;
+    }
+    return std::sqrt(sum / size);
+}
+
+inline size_t parse_number(std::string_view& s)
+{
+    size_t n = s.find_first_not_of("0123456789");
+    if (n == 0)
+        return 0;
+    if (n == std::string_view::npos)
+        n = s.size();
+    size_t result;
+    std::from_chars(s.data(), s.data() + n, result);
+    s = s.substr(n);
+    return result;
+}
+
+inline size_t product(std::vector<size_t> sizes)
+{
+    size_t result = sizes[0];
+    for (size_t i = 1; i < sizes.size(); ++i)
+        result *= sizes[i];
+    return result;
+}
+
+inline std::string sizes_to_string(std::vector<size_t> sizes)
+{
+    std::string result;
+    for (size_t n : sizes)
+    {
+        if (!result.empty())
+            result += "x";
+
+        char buf[32];
+        size_t wr = std::snprintf(buf, sizeof(buf), "%zu", n);
+        result += std::string_view(std::begin(buf), std::min(wr, sizeof(buf)));
+    }
+    return result;
+}
+
+inline std::vector<size_t> parse_size(std::string_view s)
+{
+    std::vector<size_t> result;
+    if (s.empty())
+        return result;
+    while (size_t n = parse_number(s))
+    {
+        result.push_back(n);
+        if (s.empty())
+            return result;
+        if (s[0] == 'x')
+            s = s.substr(1);
+        else
+            return {};
+    }
+    return result;
+}
+
+inline std::vector<bool> to_vector_bool(std::string_view s)
+{
+    using namespace std::string_view_literals;
+
+    std::vector<bool> result;
+    for (char c : s)
+    {
+        if ("yY1"sv.find_first_of(c) != std::string_view::npos)
+        {
+            result.push_back(true);
+        }
+        else if ("nN0"sv.find_first_of(c) != std::string_view::npos)
+        {
+            result.push_back(false);
+        }
+    }
+    return result;
+}
+
+inline std::string execfile(std::string command)
+{
+    size_t pos = command.find_last_of("/\\");
+    command    = command.substr(pos == std::string::npos ? 0 : pos + 1);
+    if (command.substr(command.size() - 4) == ".exe")
+        command = command.substr(0, command.size() - 4);
+    return command;
+}
+
+extern bool avx2only;
+
 template <typename real>
 class fft_impl
 {
