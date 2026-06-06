@@ -116,7 +116,7 @@ inline void json_number(T number)
     json_comma();
     if constexpr (std::is_floating_point_v<T>)
     {
-        int e = 12 - ceil(log10(abs(number)));
+        int e = 12 - std::ceil(std::log10(std::abs(number)));
         e     = std::max(e, 0);
         e     = std::min(e, 20);
         char buf[128];

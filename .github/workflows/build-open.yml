@@ -48,7 +48,7 @@ jobs:
           cp build/fft_benchmark_* "${{ github.workspace }}/dist"
           cp build/src_benchmark_* "${{ github.workspace }}/dist"
           curl -o "${{ github.workspace }}/dist/licenses/KFR.txt" -L https://raw.githubusercontent.com/kfrlib/kfr/refs/heads/main/LICENSE.txt
-          cp ${{ github.workspace }}/vcpkg_installed/x64-linux/share/*/copyright "${{ github.workspace }}/dist/licenses"
+          for f in ${{ github.workspace }}/vcpkg_installed/x64-linux/share/*/copyright; do cp "$f" "${{ github.workspace }}/dist/licenses/$(basename "$(dirname "$f")").txt"; done
       - name: Verify benchmarks
         # NOTE: The printed performance numbers are not meaningful here.
         # CI runners are virtualized and subject to significant timing noise.
@@ -120,7 +120,7 @@ jobs:
           cp build/fft_benchmark_* "${{ github.workspace }}/dist"
           cp build/src_benchmark_* "${{ github.workspace }}/dist"
           curl -o "${{ github.workspace }}/dist/licenses/KFR.txt" -L https://raw.githubusercontent.com/kfrlib/kfr/refs/heads/main/LICENSE.txt
-          cp ${{ github.workspace }}/vcpkg_installed/arm64-linux/share/*/copyright "${{ github.workspace }}/dist/licenses"
+          for f in ${{ github.workspace }}/vcpkg_installed/arm64-linux/share/*/copyright; do cp "$f" "${{ github.workspace }}/dist/licenses/$(basename "$(dirname "$f")").txt"; done
       - name: Verify benchmarks
         # NOTE: The printed performance numbers are not meaningful here.
         # CI runners are virtualized and subject to significant timing noise.
@@ -192,7 +192,7 @@ jobs:
           cp build/fft_benchmark_* "${{ github.workspace }}/dist"
           cp build/src_benchmark_* "${{ github.workspace }}/dist"
           curl -o "${{ github.workspace }}/dist/licenses/KFR.txt" -L https://raw.githubusercontent.com/kfrlib/kfr/refs/heads/main/LICENSE.txt
-          cp ${{ github.workspace }}/vcpkg_installed/arm64-osx/share/*/copyright "${{ github.workspace }}/dist/licenses"
+          for f in ${{ github.workspace }}/vcpkg_installed/arm64-osx/share/*/copyright; do cp "$f" "${{ github.workspace }}/dist/licenses/$(basename "$(dirname "$f")").txt"; done
       - name: Verify benchmarks
         # NOTE: The printed performance numbers are not meaningful here.
         # CI runners are virtualized and subject to significant timing noise.
@@ -259,7 +259,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path "${{ github.workspace }}\dist\licenses"
           Copy-Item build\fft_benchmark_*.exe "${{ github.workspace }}\dist"
           Copy-Item build\src_benchmark_*.exe "${{ github.workspace }}\dist"
-          Copy-Item ${{ github.workspace }}\vcpkg_installed\x64-windows-static-md\share\*\copyright "${{ github.workspace }}\dist\licenses"          
+          Get-ChildItem "${{ github.workspace }}\vcpkg_installed\x64-windows-static-md\share\*\copyright" | ForEach-Object { Copy-Item $_.FullName "${{ github.workspace }}\dist\licenses\$($_.Directory.Name).txt" }
           Invoke-WebRequest -Uri "https://raw.githubusercontent.com/kfrlib/kfr/refs/heads/main/LICENSE.txt" -OutFile "${{ github.workspace }}\dist\licenses\KFR.txt"
       - name: Verify benchmarks
         # NOTE: The printed performance numbers are not meaningful here.

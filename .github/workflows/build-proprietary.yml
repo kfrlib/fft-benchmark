@@ -63,7 +63,7 @@ jobs:
           file build/fft_benchmark_*
           mkdir -p "${{ github.workspace }}/dist/licenses"
           cp build/fft_benchmark_* "${{ github.workspace }}/dist"
-          cp build/src_benchmark_* "${{ github.workspace }}/dist"
+          cp build/src_benchmark_* "${{ github.workspace }}/dist" || true
       - name: Verify benchmarks
         # NOTE: The printed performance numbers are not meaningful here.
         # CI runners are virtualized and subject to significant timing noise.
