@@ -1,4 +1,4 @@
-name: Build
+name: Build Open Binaries
 on: push
 jobs:
   linux-x86_64:
