@@ -189,12 +189,12 @@ struct fft_benchmark_runner
     }
 
     template <bool is_complex>
-    static void accuracy_test(size_t size, const double* refout, const double* refin, bool progress)
+    static bool accuracy_test(size_t size, const double* refout, const double* refin, bool progress)
     {
         double err = accuracy_test<is_complex, false>(size, refout, refin, progress);
         err        = std::max(err, accuracy_test<is_complex, true>(size, refin, refout, progress));
         if (err < 0)
-            return;
+            return false;
         json_open_object();
         json_key("type");
         json_string(type_name<real>);
@@ -203,19 +203,30 @@ struct fft_benchmark_runner
         json_key("log_error");
         json_number(std::log10(err));
         json_close_object();
+        return err > 1e-3;
     }
 
-    static void accuracy_tests(bool progress)
+    static bool accuracy_tests(bool progress)
     {
-        accuracy_test<true>(60, dft_testvector_complex_output60, dft_testvector_complex_input60, progress);
-        accuracy_test<true>(61, dft_testvector_complex_output61, dft_testvector_complex_input61, progress);
-        accuracy_test<true>(62, dft_testvector_complex_output62, dft_testvector_complex_input62, progress);
-        accuracy_test<true>(64, dft_testvector_complex_output64, dft_testvector_complex_input64, progress);
+        bool failed = false;
+        failed |= accuracy_test<true>(60, dft_testvector_complex_output60, dft_testvector_complex_input60,
+                                      progress);
+        failed |= accuracy_test<true>(61, dft_testvector_complex_output61, dft_testvector_complex_input61,
+                                      progress);
+        failed |= accuracy_test<true>(62, dft_testvector_complex_output62, dft_testvector_complex_input62,
+                                      progress);
+        failed |= accuracy_test<true>(64, dft_testvector_complex_output64, dft_testvector_complex_input64,
+                                      progress);
 
-        accuracy_test<false>(60, dft_testvector_real_output60, dft_testvector_real_input60, progress);
-        accuracy_test<false>(61, dft_testvector_real_output61, dft_testvector_real_input61, progress);
-        accuracy_test<false>(62, dft_testvector_real_output62, dft_testvector_real_input62, progress);
-        accuracy_test<false>(64, dft_testvector_real_output64, dft_testvector_real_input64, progress);
+        failed |=
+            accuracy_test<false>(60, dft_testvector_real_output60, dft_testvector_real_input60, progress);
+        failed |=
+            accuracy_test<false>(61, dft_testvector_real_output61, dft_testvector_real_input61, progress);
+        failed |=
+            accuracy_test<false>(62, dft_testvector_real_output62, dft_testvector_real_input62, progress);
+        failed |=
+            accuracy_test<false>(64, dft_testvector_real_output64, dft_testvector_real_input64, progress);
+        return failed;
     }
 
     static void benchmark(std::vector<size_t> sizes, bool is_complex, bool inverse, bool inplace,
@@ -511,53 +522,57 @@ int main(int argc, char** argv)
     json_key("library");
     json_string(fftname);
 
+    bool accuracy_failed = false;
     if (accuracy)
     {
         json_key("accuracy");
         json_open_array();
-        fft_benchmark_runner<float>::accuracy_tests(progress);
-        fft_benchmark_runner<double>::accuracy_tests(progress);
+        accuracy_failed |= fft_benchmark_runner<float>::accuracy_tests(progress);
+        accuracy_failed |= fft_benchmark_runner<double>::accuracy_tests(progress);
         json_close_array();
     }
-
-    json_key("performance");
-    json_open_array();
-
-    if (sizes.empty())
+    if (!accuracy_failed)
     {
-        fprintf(stderr, "No sizes specified\n");
-        return 1;
-    }
+        json_key("performance");
+        json_open_array();
 
-    if (progress)
-    {
-        printf("%-6s %-7s %-9s %-10s %11s %10s | %14s%12s | %14s%12s | %7s\n", "data", "type", "direction",
-               "buffer", "size", "gflops", "best time", "(ops/sec)", "med. time", "(ops/sec)", "calls");
-    }
-
-    for (auto size : sizes)
-    {
-        if (size.size() < 1 || size.size() > 3)
+        if (sizes.empty())
         {
-            fprintf(stderr, "Incorrect number of dimensions: %zu\n", size.size());
+            fprintf(stderr, "No sizes specified\n");
             return 1;
         }
-        else
-        {
-            run(size);
-        }
-    }
 
-    json_close_array();
+        if (progress)
+        {
+            printf("%-6s %-7s %-9s %-10s %11s %10s | %14s%12s | %14s%12s | %7s\n", "data", "type",
+                   "direction", "buffer", "size", "gflops", "best time", "(ops/sec)", "med. time",
+                   "(ops/sec)", "calls");
+        }
+
+        for (auto size : sizes)
+        {
+            if (size.size() < 1 || size.size() > 3)
+            {
+                fprintf(stderr, "Incorrect number of dimensions: %zu\n", size.size());
+                return 1;
+            }
+            else
+            {
+                run(size);
+            }
+        }
+
+        json_close_array();
+    }
 
     json_close_object();
 
     if (outname.empty())
-        return 0;
+        return accuracy_failed ? 1 : 0;
     if (outname != "-")
     {
         freopen(outname.c_str(), "w", stdout);
     }
     fputs(json_output.c_str(), stdout);
-    return 0;
+    return accuracy_failed ? 1 : 0;
 }

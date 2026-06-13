@@ -57,7 +57,7 @@ jobs:
           echo "NOTE: Performance numbers below are not meaningful - CI runners are virtualized and subject to significant timing noise. This step only verifies that the compiled binaries start and run without errors."
           for bin in build/fft_benchmark_*; do
             echo "=== $bin ==="
-            "$bin" --no-banner --complex y --inverse n --inplace n 4096
+            "$bin"  --accuracy --no-banner --complex y --inverse n --inplace n 4096
           done
       - name: Binaries
         uses: actions/upload-artifact@v4
@@ -129,7 +129,7 @@ jobs:
           echo "NOTE: Performance numbers below are not meaningful - CI runners are virtualized and subject to significant timing noise. This step only verifies that the compiled binaries start and run without errors."
           for bin in build/fft_benchmark_*; do
             echo "=== $bin ==="
-            "$bin" --no-banner --complex y --inverse n --inplace n 4096
+            "$bin"  --accuracy --no-banner --complex y --inverse n --inplace n 4096
           done
       - name: Binaries
         uses: actions/upload-artifact@v4
@@ -201,7 +201,7 @@ jobs:
           echo "NOTE: Performance numbers below are not meaningful - CI runners are virtualized and subject to significant timing noise. This step only verifies that the compiled binaries start and run without errors."
           for bin in build/fft_benchmark_*; do
             echo "=== $bin ==="
-            "$bin" --no-banner --complex y --inverse n --inplace n 4096
+            "$bin"  --accuracy --no-banner --complex y --inverse n --inplace n 4096
           done
       - name: Binaries
         uses: actions/upload-artifact@v4
@@ -269,7 +269,7 @@ jobs:
           Write-Host "NOTE: Performance numbers below are not meaningful - CI runners are virtualized and subject to significant timing noise. This step only verifies that the compiled binaries start and run without errors."
           Get-ChildItem build\fft_benchmark_*.exe | ForEach-Object {
             Write-Host "=== $($_.Name) ==="
-            & $_.FullName --no-banner --complex y --inverse n --inplace n 4096
+            & $_.FullName  --accuracy --no-banner --complex y --inverse n --inplace n 4096
           }
       - name: Binaries
         uses: actions/upload-artifact@v4
