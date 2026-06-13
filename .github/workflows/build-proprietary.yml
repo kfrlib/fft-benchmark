@@ -81,7 +81,7 @@ jobs:
           path: ${{ github.workspace }}/dist
 
   windows-x86_64:
-    runs-on: windows-latest
+    runs-on: windows-2022
     steps:
       - name: Install IPP & MKL
         shell: cmd

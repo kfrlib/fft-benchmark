@@ -292,7 +292,7 @@ struct fft_benchmark_runner
             if (inplace)
                 std::copy(in, in + size * 2, out);
 
-            if (total_calls / inner_iterations >= 50)
+            if (total_calls / inner_iterations >= 10)
             {
                 if (total_duration >= std::chrono::duration<double>(benchmark_duration))
                     break;

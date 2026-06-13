@@ -122,4 +122,15 @@ function (add_benchmark NAME)
     endif ()
 endfunction ()
 
+# Enable AVX2 if on x86
+if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    if (CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|i686|i386")
+        add_compile_options(-mavx2 -mfma)
+    endif ()
+elseif (MSVC)
+    if (CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
+        add_compile_options(/arch:AVX2)
+    endif ()
+endif ()
+
 add_subdirectory(libs)

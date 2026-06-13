@@ -218,7 +218,7 @@ jobs:
             ${{ github.workspace }}/vcpkg/buildtrees
 
   windows-x86_64:
-    runs-on: windows-latest
+    runs-on: windows-2022
     env:
       VCPKG_FEATURE_FLAGS: manifests
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\.vcpkg-cache

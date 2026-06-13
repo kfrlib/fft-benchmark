@@ -10,6 +10,8 @@ if (OPEN)
     add_subdirectory(soxr)
     add_subdirectory(speex)
     add_subdirectory(r8brain)
+    add_subdirectory(pocketfft)
+    add_subdirectory(otfft)
     
 else ()
 
