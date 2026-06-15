@@ -5,9 +5,6 @@ if (KFR_SRC_DIR)
     set(CMAKE_CXX_STANDARD 20)
     set(CMAKE_CXX_EXTENSIONS ON)
 
-    set(KFR_ENABLE_MULTIARCH
-        FALSE
-        CACHE BOOL "" FORCE)
     add_subdirectory(${KFR_SRC_DIR} kfr)
 
     message(STATUS "KFR_SRC_DIR is set. Enabling KFR")

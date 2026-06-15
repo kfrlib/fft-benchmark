@@ -16,6 +16,7 @@ FetchContent_Declare(
 # FetchContent_MakeAvailable / add_subdirectory cannot be used here: OTFFT's CMakeLists.txt calls custom macros
 # (mergestaticlibs, CMakeSettings, SetFullOptimization, etc.) from its own cmake/ subfolder that are not designed for
 # embedding as a subdirectory.  We just download the sources and define our own clean targets.
+cmake_policy(SET CMP0169 OLD)
 FetchContent_Populate(otfft)
 
 if (otfft_POPULATED)
