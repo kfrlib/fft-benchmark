@@ -6,6 +6,7 @@ if (TARGET pffft::pffft)
     add_benchmark(
         pffft
         FFT
+        ALL
         SOURCES
         ${CMAKE_CURRENT_LIST_DIR}/pffft.cpp
         LIBRARIES

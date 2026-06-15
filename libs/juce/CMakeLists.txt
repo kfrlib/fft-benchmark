@@ -8,6 +8,7 @@ if (TARGET juce::juce_dsp)
         juce
         FFT
         SRC
+        ANY
         SOURCES
         ${CMAKE_CURRENT_LIST_DIR}/juce.cpp
         LIBRARIES

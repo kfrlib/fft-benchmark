@@ -31,6 +31,7 @@ jobs:
         run: |
           echo "NOTE: Performance numbers below are not meaningful - CI runners are virtualized and subject to significant timing noise. This step only verifies that the compiled binaries start and run without errors."
           for bin in build/fft_benchmark_*; do
+            case "$bin" in *-avx512*) echo "=== SKIP $bin (AVX-512 not supported on CI) ==="; continue ;; esac
             echo "=== $bin ==="
             "$bin"  --accuracy --no-banner --complex y --inverse n --inplace n 4096
           done
@@ -144,6 +145,7 @@ jobs:
         run: |
           Write-Host "NOTE: Performance numbers below are not meaningful - CI runners are virtualized and subject to significant timing noise. This step only verifies that the compiled binaries start and run without errors."
           Get-ChildItem build\fft_benchmark_*.exe | ForEach-Object {
+            if ($_.Name -like "*-avx512*") { Write-Host "=== SKIP $($_.Name) (AVX-512 not supported on CI) ==="; return }
             Write-Host "=== $($_.Name) ==="
             & $_.FullName  --accuracy --no-banner --complex y --inverse n --inplace n 4096
           }

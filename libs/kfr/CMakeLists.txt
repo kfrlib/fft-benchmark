@@ -22,5 +22,5 @@ else ()
 endif ()
 
 if (TARGET kfr)
-    add_benchmark(kfr FFT SRC SOURCES ${CMAKE_CURRENT_LIST_DIR}/kfr.cpp LIBRARIES kfr kfr_dft kfr_dsp)
+    add_benchmark(kfr FFT SRC ANY SOURCES ${CMAKE_CURRENT_LIST_DIR}/kfr.cpp LIBRARIES kfr kfr_dft kfr_dsp)
 endif ()

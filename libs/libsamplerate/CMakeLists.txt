@@ -3,7 +3,7 @@ find_package(SampleRate CONFIG)
 if (SampleRate_FOUND)
     message(STATUS "libsamplerate is found. Enabling libsamplerate")
 
-    add_benchmark(libsamplerate SRC SOURCES ${CMAKE_CURRENT_LIST_DIR}/libsamplerate.cpp LIBRARIES
+    add_benchmark(libsamplerate SRC ANY SOURCES ${CMAKE_CURRENT_LIST_DIR}/libsamplerate.cpp LIBRARIES
                   SampleRate::samplerate)
 
 else ()

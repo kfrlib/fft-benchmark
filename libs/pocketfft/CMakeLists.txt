@@ -7,7 +7,7 @@ find_path(
 if (POCKETFFT_INCLUDE_DIR)
     message(STATUS "PocketFFT is found at ${POCKETFFT_INCLUDE_DIR}. Enabling PocketFFT")
 
-    add_benchmark(pocketfft FFT SOURCES ${CMAKE_CURRENT_LIST_DIR}/pocketfft.cpp INCLUDES ${POCKETFFT_INCLUDE_DIR})
+    add_benchmark(pocketfft FFT ALL SOURCES ${CMAKE_CURRENT_LIST_DIR}/pocketfft.cpp INCLUDES ${POCKETFFT_INCLUDE_DIR})
 else ()
     message(STATUS "PocketFFT is not found. Please add it to your CMAKE_PREFIX_PATH.")
 endif ()

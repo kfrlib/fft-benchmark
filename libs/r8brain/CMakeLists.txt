@@ -3,7 +3,7 @@ include(FetchContent)
 FetchContent_Declare(
     r8brain_free_src
     GIT_REPOSITORY https://github.com/avaneev/r8brain-free-src.git
-    GIT_TAG master
+    GIT_TAG 7.1
     GIT_SHALLOW TRUE
 )
 
@@ -16,7 +16,7 @@ if (r8brain_free_src_POPULATED)
     target_include_directories(r8brain_lib PUBLIC ${r8brain_free_src_SOURCE_DIR})
     target_compile_definitions(r8brain_lib PUBLIC R8B_PFFFT_DOUBLE=1)
 
-    add_benchmark(r8brain SRC SOURCES ${CMAKE_CURRENT_LIST_DIR}/r8brain.cpp LIBRARIES r8brain_lib)
+    add_benchmark(r8brain SRC ALL SOURCES ${CMAKE_CURRENT_LIST_DIR}/r8brain.cpp LIBRARIES r8brain_lib)
 
 else ()
     message(STATUS "r8brain-free-src is not found. Disabling r8brain")
