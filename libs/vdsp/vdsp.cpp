@@ -65,6 +65,8 @@ public:
 
     bool valid_setup() const { return isetup != nullptr || zsetup != nullptr; }
 
+    fft_scaling scaling() const final { return fft_scaling::vdsp; }
+
     void execute(real* out, const real* in)
     {
         if (isetup)
@@ -138,7 +140,9 @@ private:
 //   output: Or[0]  = H[0]   (DC, pure real)
 //           Oi[0]  = H[N/2] (Nyquist, pure real)
 //           Or[k]  = Re(H[k]), Oi[k] = Im(H[k])  for 1 <= k < N/2
-//   scale:  vDSP forward has C=2, so we apply a 0.5 scale to match FFTW.
+//   scale:  vDSP forward has C=2 (output is 2x the standard unnormalized DFT).
+//           No scaling is performed in the wrapper; the accuracy verifier
+//           adapts to the library's reported convention.
 //
 // Benchmark output format: N/2+1 interleaved complex (FFTW style).
 template <typename real, bool inplace>
@@ -166,6 +170,8 @@ public:
 
     bool valid_setup() const { return setup != nullptr; }
 
+    fft_scaling scaling() const final { return fft_scaling::vdsp; }
+
     void execute(real* out, const real* in)
     {
         // Deinterleave N reals → N/2 split-complex (reuses ctoz)
@@ -174,11 +180,6 @@ public:
             DSPSplitComplex si = { Ir, Ii };
             vDSP_ctoz(reinterpret_cast<const DSPComplex*>(in), 2, &si, 1, N / 2);
             vDSP_DFT_Execute(setup, Ir, Ii, Or, Oi);
-
-            // Scale by 0.5 (vDSP forward has C=2)
-            constexpr float half = 0.5f;
-            vDSP_vsmul(Or, 1, &half, Or, 1, N / 2);
-            vDSP_vsmul(Oi, 1, &half, Oi, 1, N / 2);
 
             // Repack to FFTW-style N/2+1 interleaved complex:
             //   [DC_re, 0, bin1_re, bin1_im, ..., Nyq_re, 0]
@@ -194,10 +195,6 @@ public:
             DSPDoubleSplitComplex si = { Ir, Ii };
             vDSP_ctozD(reinterpret_cast<const DSPDoubleComplex*>(in), 2, &si, 1, N / 2);
             vDSP_DFT_ExecuteD(setup, Ir, Ii, Or, Oi);
-
-            constexpr double half = 0.5;
-            vDSP_vsmulD(Or, 1, &half, Or, 1, N / 2);
-            vDSP_vsmulD(Oi, 1, &half, Oi, 1, N / 2);
 
             out[0]                   = Or[0];
             out[1]                   = 0.0;
@@ -258,6 +255,8 @@ public:
     }
 
     bool valid_setup() const { return setup != nullptr; }
+
+    fft_scaling scaling() const final { return fft_scaling::vdsp; }
 
     void execute(real* out, const real* in)
     {

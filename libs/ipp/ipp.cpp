@@ -91,6 +91,13 @@ private:
 };
 
 // real
+// IPP ippsDFTFwd_RToCCS / ippsDFTInv_CCSToR use the IPP "CCS" packed layout,
+// which is the benchmark's `ccs` layout: 2*(N/2+1) reals
+//   even N: [Re0, Im0(=0), Re1, Im1, ..., Re(N/2-1), Im(N/2-1), Re(N/2), Im(N/2)(=0)]
+//   odd  N: [Re0, Im0(=0), Re1, Im1, ..., Re((N-1)/2), Im((N-1)/2)]
+// (Nyquist at index 2*half for even N; Im0 and ImNyq are structurally zero.)
+// This is NOT the IPP "Perm" (half-complex, hc) layout. No conversion is
+// performed — the benchmark adapts to the reported layout.
 template <typename real, bool invert, bool inplace>
 class fft_implementation<1, real, false, invert, inplace> : public fft_impl<real>
 {
@@ -114,6 +121,8 @@ public:
         ippsDFTInit_R_T(size[0], IPP_FFT_NODIV_BY_ANY, ippAlgHintAccurate, plan, initmem);
         temp = bufsize ? ippsMalloc_8u(bufsize) : NULL;
     }
+
+    real_layout layout() const final { return real_layout::ccs; }
 
     void execute(real* out, const real* in)
     {

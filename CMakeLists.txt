@@ -63,25 +63,6 @@ set(SRC_SRCS ${CMAKE_CURRENT_LIST_DIR}/src/src_benchmark.cpp ${CMAKE_CURRENT_LIS
 
 enable_testing()
 
-set(FFT_SIZES
-    16
-    32
-    64
-    128
-    256
-    512
-    1024
-    2048
-    4096
-    8192
-    16384
-    32768
-    65536
-    131072
-    262144
-    524288
-    1048576)
-
 option(OPEN "Only include open-source libraries" ON)
 
 if (SINGLE)
@@ -151,14 +132,14 @@ function (add_benchmark NAME)
         add_custom_target(fft_benchmark_${NAME} ALL)
         if (NOT IS_X86 OR LIB_ANY)
             add_benchmark_target(fft_benchmark_${NAME} any ${FFT_SRCS})
+            add_test(NAME benchmark_${NAME} COMMAND fft_benchmark_${NAME}-any --save
+                                                    ${CMAKE_BINARY_DIR}/accuracy.${NAME}.json --accuracy)
         elseif (IS_X86 AND LIB_ALL)
             add_benchmark_target(fft_benchmark_${NAME} avx2 ${FFT_SRCS})
             add_benchmark_target(fft_benchmark_${NAME} avx512 ${FFT_SRCS})
+            add_test(NAME benchmark_${NAME} COMMAND fft_benchmark_${NAME}-avx2 --save
+                                                    ${CMAKE_BINARY_DIR}/accuracy.${NAME}.json --accuracy)
         endif ()
-
-        add_test(
-            NAME benchmark_${NAME} COMMAND fft_benchmark_${NAME} --save ${CMAKE_BINARY_DIR}/results_${NAME}.json
-                                           --no-banner --no-progress ${FFT_SIZES} --complex y --inplace n --inverse n)
 
     endif ()
     if (LIB_SRC)
@@ -169,10 +150,6 @@ function (add_benchmark NAME)
             add_benchmark_target(src_benchmark_${NAME} avx2 ${SRC_SRCS})
             add_benchmark_target(src_benchmark_${NAME} avx512 ${SRC_SRCS})
         endif ()
-
-        add_test(
-            NAME benchmark_src_${NAME} COMMAND src_benchmark_${NAME} --save
-                                               ${CMAKE_BINARY_DIR}/results_src_${NAME}.json --no-banner --no-progress)
     endif ()
 endfunction ()
 

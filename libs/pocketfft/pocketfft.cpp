@@ -42,33 +42,23 @@ private:
 };
 
 // real forward (real-to-complex), 1D only
-// pocketfft_r::exec produces FFTPACK packed format: [DC, r1, i1, r2, i2, ..., Nyq(even N)]
-// The benchmark expects standard interleaved: [DC, 0, r1, i1, ..., Nyq, 0]
+// pocketfft_r::exec produces the native FFTPACK packed layout (N reals):
+//   even N: [DC, r1, i1, r2, i2, ..., Nyq]
+//   odd  N: [DC, r1, i1, ..., r((N-1)/2), i((N-1)/2)]
+// No conversion is performed — the benchmark adapts to the reported layout.
 template <typename real, bool inplace>
 class fft_implementation<1, real, false, false, inplace> : public fft_impl<real>
 {
 public:
     fft_implementation(sizes_t<1> sizes) : N(sizes[0]), plan(sizes[0]) {}
 
+    real_layout layout() const final { return real_layout::fftpack; }
+
     void execute(real* out, const real* in)
     {
         if constexpr (!inplace)
             std::memcpy(out, in, N * sizeof(real));
         plan.exec(out, real(1), true);
-        // Convert FFTPACK → standard complex in-place, working backward to avoid overwrites
-        if (N % 2 == 0)
-        {
-            out[N]     = out[N - 1]; // Nyquist real
-            out[N + 1] = real(0);
-        }
-        for (ptrdiff_t k = (ptrdiff_t)((N - 1) / 2); k >= 1; --k)
-        {
-            real re        = out[2 * k - 1];
-            real im        = out[2 * k];
-            out[2 * k + 1] = im;
-            out[2 * k]     = re;
-        }
-        out[1] = real(0); // DC imaginary = 0
     }
 
 private:
@@ -77,25 +67,19 @@ private:
 };
 
 // real backward (complex-to-real), 1D only
+// Consumes the FFTPACK packed layout above; no conversion.
 template <typename real, bool inplace>
 class fft_implementation<1, real, false, true, inplace> : public fft_impl<real>
 {
 public:
     fft_implementation(sizes_t<1> sizes) : N(sizes[0]), plan(sizes[0]) {}
 
+    real_layout layout() const final { return real_layout::fftpack; }
+
     void execute(real* out, const real* in)
     {
-        // Convert standard complex → FFTPACK packed format
-        // Forward pass: write position 2k-1 < read position 2k, so safe for in==out
         if constexpr (!inplace)
-            out[0] = in[0];
-        for (size_t k = 1; k <= (N - 1) / 2; ++k)
-        {
-            out[2 * k - 1] = in[2 * k];
-            out[2 * k]     = in[2 * k + 1];
-        }
-        if (N % 2 == 0)
-            out[N - 1] = in[N]; // Nyquist real
+            std::memcpy(out, in, N * sizeof(real));
         plan.exec(out, real(1), false);
     }
 

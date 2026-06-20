@@ -14,8 +14,10 @@
 #include <cmath>
 #include <numeric>
 #include <string>
+#include <utility>
 
 #include "json.hpp"
+#include <fstream>
 
 extern "C" const double dft_testvector_complex_input60[];
 extern "C" const double dft_testvector_complex_output60[];
@@ -115,28 +117,86 @@ template <typename real>
 struct fft_benchmark_runner
 {
 
-    static double compute_max_error(const real* data, const double* refout, size_t out_size)
+    // The reference test vectors use the unnormalized convention:
+    //   forward reference  = DFT sum (no 1/N)
+    //   inverse reference  = original time-domain signal (the forward reference
+    //                        is the spectrum of this signal)
+    // Each library reports its normalization convention via fft->scaling().
+    // To compare without ever rescaling the library output, we scale the
+    // reference to match what the library produces. Returns the factor by
+    // which the reference must be multiplied.
+    static double reference_scale(fft_scaling scaling, bool inverse, size_t size)
     {
-        double maxerr = 0;
-        for (size_t i = 0; i < out_size; i++)
-            maxerr = std::max(maxerr, std::abs(data[i] - refout[i]));
-        return maxerr;
+        switch (scaling)
+        {
+        case fft_scaling::none:
+            // forward: unnormalized  -> matches reference (×1)
+            // inverse: unnormalized  -> N × reference
+            return inverse ? static_cast<double>(size) : 1.0;
+        case fft_scaling::sqrt_n:
+            // forward: × sqrt(1/N)   -> reference × sqrt(1/N)
+            // inverse: × sqrt(1/N) applied to unnormalized spectrum
+            //          = sqrt(N) × reference
+            return inverse ? std::sqrt(static_cast<double>(size))
+                           : 1.0 / std::sqrt(static_cast<double>(size));
+        case fft_scaling::inverse_n:
+            // forward: unnormalized  -> matches reference (×1)
+            // inverse: × 1/N         -> matches reference (×1)
+            return 1.0;
+        case fft_scaling::vdsp:
+            // forward: 2 × DFT sum   -> reference × 2
+            // inverse: unnormalized  -> N × reference
+            return inverse ? static_cast<double>(size) : 2.0;
+        }
+        return 1.0;
     }
 
-    static void maybe_rescale_inverse(std::vector<real, aligned_allocator<real>>& data, size_t out_size,
-                                      size_t size, bool inverse, double& err, const double* refout)
+    // Prepare the input buffer for an accuracy test.
+    //  - complex transforms: copy refin verbatim (interleaved complex).
+    //  - real forward (r2c): copy refin verbatim (N real samples).
+    //  - real inverse (c2r): convert the ccs reference spectrum in `refin`
+    //    into the library's preferred packed layout.
+    static void prepare_input(real* dst, const double* refin, size_t in_size, size_t size, bool is_complex,
+                              bool inverse, real_layout layout)
     {
-        if (err > 1e-4 && inverse)
+        if (is_complex || !inverse)
         {
-            double scale = 1.0 / size;
-            for (size_t i = 0; i < out_size; i++)
-                data[i] *= static_cast<real>(scale);
-            err = rms(data.data(), refout, out_size);
+            for (size_t i = 0; i < in_size; i++)
+                dst[i] = static_cast<real>(refin[i]);
+            return;
         }
+        // c2r: convert ccs reference spectrum → library layout, in place.
+        convert_ccs_to_layout(refin, size, layout, dst);
+    }
+
+    // Evaluate a library output buffer against the (unscaled) reference.
+    // `ref_scale` adapts the reference to the library's normalization.
+    //  - complex transforms & real inverse (c2r): direct RMS/max over the
+    //    interleaved / time-domain buffer (reference scaled element-wise).
+    //  - real forward (r2c): bin-wise comparison of the packed spectrum
+    //    against the ccs reference (scaling applied inside compare_spectrum).
+    static std::pair<double, double> evaluate(const real* data, const double* refout, size_t out_size,
+                                              size_t size, bool is_complex, bool inverse, real_layout layout,
+                                              double ref_scale)
+    {
+        if (is_complex || inverse)
+        {
+            double sum = 0, maxerr = 0;
+            for (size_t i = 0; i < out_size; i++)
+            {
+                double diff = static_cast<double>(data[i]) - refout[i] * ref_scale;
+                sum += diff * diff;
+                maxerr = std::max(maxerr, std::abs(diff));
+            }
+            return { std::sqrt(sum / out_size), maxerr };
+        }
+        // r2c forward: compare packed spectrum against ccs reference, bin-wise.
+        spectrum_error e = compare_spectrum(data, size, layout, refout, ref_scale);
+        return { e.rms, e.max };
     }
 
     template <bool is_complex, bool inverse, bool inplace>
-    static double accuracy_test(size_t size, const double* refout, const double* refin, bool progress)
+    static unsigned accuracy_test(size_t size, const double* refout, const double* refin, bool progress)
     {
         std::unique_ptr<fft_impl<real>> fft = fft_create<real>({ size }, is_complex, inverse, inplace);
         if (!fft)
@@ -146,20 +206,32 @@ struct fft_benchmark_runner
                     "%6s accuracy: %31s for %7s %7s %10s DFT of size %zu -- Not supported in the library\n",
                     type_name<real>, "-", is_complex ? "complex" : "real", inverse ? "inverse" : "forward",
                     inplace ? "inplace" : "outofplace", size);
-            return -1;
+            return 0; // Not a failure of accuracy, just not supported.
         }
-        const size_t in_size  = is_complex ? size * 2 : !inverse ? size : size / 2 * 2 + 2;
-        const size_t out_size = is_complex ? size * 2 : !inverse ? size / 2 * 2 + 2 : size;
+
+        // For real transforms, the library produces/consumes its preferred
+        // packed layout (fft->layout()). The reference vectors are always ccs.
+        // We adapt on the accuracy-check side: convert the ccs reference into
+        // the library's layout for c2r input, and compare r2c output in a
+        // layout-agnostic way. No conversion is done inside the wrapper.
+        const real_layout layout = is_complex ? real_layout::ccs : fft->layout();
+        // The library reports its normalization convention; we scale the
+        // reference to match instead of rescaling the library output.
+        const double ref_scale = reference_scale(fft->scaling(), inverse, size);
+
+        const size_t spectrum_size = real_spectrum_size(size, layout);
+        const size_t in_size       = is_complex ? size * 2 : !inverse ? size : spectrum_size;
+        const size_t out_size      = is_complex ? size * 2 : !inverse ? spectrum_size : size;
+
         double err, maxerr = 0;
         if constexpr (inplace)
         {
             std::vector<real, aligned_allocator<real>> inout(std::max(in_size, out_size));
             inout.reserve(size * 2 + 2); // For safety
-            std::copy(refin, refin + in_size, inout.data());
+            prepare_input(inout.data(), refin, in_size, size, is_complex, inverse, layout);
             fft->execute(inout.data(), inout.data());
-            err = rms(inout.data(), refout, out_size);
-            maybe_rescale_inverse(inout, out_size, size, inverse, err, refout);
-            maxerr = compute_max_error(inout.data(), refout, out_size);
+            std::tie(err, maxerr) =
+                evaluate(inout.data(), refout, out_size, size, is_complex, inverse, layout, ref_scale);
         }
         else
         {
@@ -167,64 +239,69 @@ struct fft_benchmark_runner
             std::vector<real, aligned_allocator<real>> out(out_size);
             in.reserve(size * 2 + 2); // For safety
             out.reserve(size * 2 + 2); // For safety
-            std::copy(refin, refin + in_size, in.data());
+            prepare_input(in.data(), refin, in_size, size, is_complex, inverse, layout);
             fft->execute(out.data(), in.data());
-            err = rms(out.data(), refout, out_size);
-            maybe_rescale_inverse(out, out_size, size, inverse, err, refout);
-            maxerr = compute_max_error(out.data(), refout, out_size);
+            std::tie(err, maxerr) =
+                evaluate(out.data(), refout, out_size, size, is_complex, inverse, layout, ref_scale);
         }
         if (progress)
             printf("%6s accuracy: %12g (max %12g) for %7s %7s %10s DFT of size %zu\n", type_name<real>, err,
                    maxerr, is_complex ? "complex" : "real", inverse ? "inverse" : "forward",
                    inplace ? "inplace" : "outofplace", size);
-        return err;
-    }
 
-    template <bool is_complex, bool inverse>
-    static double accuracy_test(size_t size, const double* refout, const double* refin, bool progress)
-    {
-        double err = accuracy_test<is_complex, inverse, false>(size, refout, refin, progress);
-        err        = std::max(err, accuracy_test<is_complex, inverse, true>(size, refout, refin, progress));
-        return err;
-    }
-
-    template <bool is_complex>
-    static bool accuracy_test(size_t size, const double* refout, const double* refin, bool progress)
-    {
-        double err = accuracy_test<is_complex, false>(size, refout, refin, progress);
-        err        = std::max(err, accuracy_test<is_complex, true>(size, refin, refout, progress));
-        if (err < 0)
-            return false;
         json_open_object();
         json_key("type");
         json_string(type_name<real>);
         json_key("size");
         json_number(size);
+        json_key("complex");
+        json_bool(is_complex);
+        json_key("inverse");
+        json_bool(inverse);
+        json_key("inplace");
+        json_bool(inplace);
         json_key("log_error");
         json_number(std::log10(err));
         json_close_object();
-        return err > 1e-3;
+        if constexpr (std::is_same<real, float>::value)
+            return maxerr > 1e-3 ? 1 : 0;
+        else
+            return maxerr > 1e-12 ? 1 : 0;
     }
 
-    static bool accuracy_tests(bool progress)
+    template <bool is_complex, bool inverse>
+    static unsigned accuracy_test(size_t size, const double* refout, const double* refin, bool progress)
     {
-        bool failed = false;
-        failed |= accuracy_test<true>(60, dft_testvector_complex_output60, dft_testvector_complex_input60,
+        return accuracy_test<is_complex, inverse, false>(size, refout, refin, progress) +
+               accuracy_test<is_complex, inverse, true>(size, refout, refin, progress);
+    }
+
+    template <bool is_complex>
+    static unsigned accuracy_test(size_t size, const double* refout, const double* refin, bool progress)
+    {
+        return accuracy_test<is_complex, false>(size, refout, refin, progress) +
+               accuracy_test<is_complex, true>(size, refin, refout, progress);
+    }
+
+    static unsigned accuracy_tests(bool progress)
+    {
+        unsigned failed = 0;
+        failed += accuracy_test<true>(60, dft_testvector_complex_output60, dft_testvector_complex_input60,
                                       progress);
-        failed |= accuracy_test<true>(61, dft_testvector_complex_output61, dft_testvector_complex_input61,
+        failed += accuracy_test<true>(61, dft_testvector_complex_output61, dft_testvector_complex_input61,
                                       progress);
-        failed |= accuracy_test<true>(62, dft_testvector_complex_output62, dft_testvector_complex_input62,
+        failed += accuracy_test<true>(62, dft_testvector_complex_output62, dft_testvector_complex_input62,
                                       progress);
-        failed |= accuracy_test<true>(64, dft_testvector_complex_output64, dft_testvector_complex_input64,
+        failed += accuracy_test<true>(64, dft_testvector_complex_output64, dft_testvector_complex_input64,
                                       progress);
 
-        failed |=
+        failed +=
             accuracy_test<false>(60, dft_testvector_real_output60, dft_testvector_real_input60, progress);
-        failed |=
+        failed +=
             accuracy_test<false>(61, dft_testvector_real_output61, dft_testvector_real_input61, progress);
-        failed |=
+        failed +=
             accuracy_test<false>(62, dft_testvector_real_output62, dft_testvector_real_input62, progress);
-        failed |=
+        failed +=
             accuracy_test<false>(64, dft_testvector_real_output64, dft_testvector_real_input64, progress);
         return failed;
     }
@@ -385,85 +462,126 @@ int main(int argc, char** argv)
     setvbuf(stdout, NULL, _IONBF, 0);
     using namespace std::string_view_literals;
 
+    // Expand @<arguments_file> into the argument list. The --save argument is
+    // never read from file (it must be passed on the command line).
+    std::vector<std::string> expanded_args;
     for (size_t i = 1; i < argc; i++)
     {
-        if (argv[i] == "--save"sv)
+        std::string arg = argv[i];
+        if (arg.size() > 1 && arg[0] == '@')
         {
-            if (i + 1 < argc)
+            std::string filename = arg.substr(1);
+            std::ifstream f(filename);
+            if (!f)
             {
-                outname = argv[i + 1];
+                fprintf(stderr, "Cannot open arguments file: %s\n", filename.c_str());
+                return 1;
+            }
+            std::string token;
+            bool skip_next = false;
+            while (f >> token)
+            {
+                if (skip_next)
+                {
+                    // This token is the value of a --save read from file; drop it.
+                    skip_next = false;
+                    continue;
+                }
+                if (token == "--save")
+                {
+                    // --save (and its value) must come from the command line, not a file.
+                    skip_next = true;
+                    continue;
+                }
+                expanded_args.push_back(token);
+            }
+        }
+        else
+        {
+            expanded_args.push_back(arg);
+        }
+    }
+
+    for (size_t i = 0; i < expanded_args.size(); i++)
+    {
+        const std::string& arg = expanded_args[i];
+        if (arg == "--save"sv)
+        {
+            if (i + 1 < expanded_args.size())
+            {
+                outname = expanded_args[i + 1];
                 ++i;
             }
         }
-        else if (argv[i] == "--no-progress"sv)
+        else if (arg == "--no-progress"sv)
         {
             progress = false;
         }
-        else if (argv[i] == "--progress"sv)
+        else if (arg == "--progress"sv)
         {
             progress = true;
         }
-        else if (argv[i] == "--no-accuracy"sv)
+        else if (arg == "--no-accuracy"sv)
         {
             accuracy = false;
         }
-        else if (argv[i] == "--accuracy"sv)
+        else if (arg == "--accuracy"sv)
         {
             accuracy = true;
         }
-        else if (argv[i] == "--no-banner"sv)
+        else if (arg == "--no-banner"sv)
         {
             banner = false;
         }
-        else if (argv[i] == "--banner"sv)
+        else if (arg == "--banner"sv)
         {
             banner = true;
         }
-        else if (argv[i] == "--complex"sv)
+        else if (arg == "--complex"sv)
         {
-            if (i + 1 < argc)
+            if (i + 1 < expanded_args.size())
             {
-                is_complex_list = to_vector_bool(argv[i + 1]);
+                is_complex_list = to_vector_bool(expanded_args[i + 1]);
                 ++i;
             }
         }
-        else if (argv[i] == "--inplace"sv)
+        else if (arg == "--inplace"sv)
         {
-            if (i + 1 < argc)
+            if (i + 1 < expanded_args.size())
             {
-                inplace_list = to_vector_bool(argv[i + 1]);
+                inplace_list = to_vector_bool(expanded_args[i + 1]);
                 ++i;
             }
         }
-        else if (argv[i] == "--inverse"sv)
+        else if (arg == "--inverse"sv)
         {
-            if (i + 1 < argc)
+            if (i + 1 < expanded_args.size())
             {
-                inverse_list = to_vector_bool(argv[i + 1]);
+                inverse_list = to_vector_bool(expanded_args[i + 1]);
                 ++i;
             }
         }
-        else if (argv[i] == "--duration"sv)
+        else if (arg == "--duration"sv)
         {
-            if (i + 1 < argc)
+            if (i + 1 < expanded_args.size())
             {
-                duration = std::stod(argv[i + 1]);
+                duration = std::stod(expanded_args[i + 1]);
                 ++i;
             }
         }
-        else if (argv[i] == "--avx2-only"sv)
+        else if (arg == "--avx2-only"sv)
         {
             avx2only = true;
         }
-        else if (argv[i] == "--"sv)
+        else if (arg == "--"sv)
         {
         }
         else
         {
-            auto size = parse_size(argv[i]);
+            auto size = parse_size(arg);
             if (size.empty())
             {
-                fprintf(stderr, "Incorrect size: %s\n", argv[i]);
+                fprintf(stderr, "Incorrect size: %s\n", arg.c_str());
                 return 1;
             }
             sizes.push_back(std::move(size));
@@ -522,16 +640,16 @@ int main(int argc, char** argv)
     json_key("library");
     json_string(fftname);
 
-    bool accuracy_failed = false;
+    unsigned accuracy_failed = 0;
     if (accuracy)
     {
         json_key("accuracy");
         json_open_array();
-        accuracy_failed |= fft_benchmark_runner<float>::accuracy_tests(progress);
-        accuracy_failed |= fft_benchmark_runner<double>::accuracy_tests(progress);
+        accuracy_failed += fft_benchmark_runner<float>::accuracy_tests(progress);
+        accuracy_failed += fft_benchmark_runner<double>::accuracy_tests(progress);
         json_close_array();
     }
-    if (!accuracy_failed)
+    if (accuracy_failed == 0)
     {
         json_key("performance");
         json_open_array();
@@ -539,7 +657,7 @@ int main(int argc, char** argv)
         if (sizes.empty())
         {
             fprintf(stderr, "No sizes specified\n");
-            return 1;
+            return accuracy ? 0 : 1;
         }
 
         if (progress)

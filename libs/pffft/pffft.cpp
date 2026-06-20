@@ -47,6 +47,9 @@ private:
 };
 
 // real forward (real-to-complex), float only, 1D only
+// pffft native real layout (hc): N floats
+//   [Re0, ReNyq, Re1, Im1, Re2, Im2, ..., Re(N/2-1), Im(N/2-1)]  (even N)
+// No conversion is performed — the benchmark adapts to the reported layout.
 template <bool inplace>
 class fft_implementation<1, float, false, false, inplace> : public fft_impl<float>
 {
@@ -57,12 +60,11 @@ public:
         work  = static_cast<float*>(pffft_aligned_malloc(N * sizeof(float)));
     }
 
+    real_layout layout() const final { return real_layout::hc; }
+
     void execute(float* out, const float* in)
     {
         pffft_transform_ordered(setup, in, out, work, PFFFT_FORWARD);
-        out[N]     = out[1];
-        out[N + 1] = 0;
-        out[1]     = 0;
     }
 
     ~fft_implementation()
@@ -78,6 +80,7 @@ private:
 };
 
 // real backward (complex-to-real), float only, 1D only
+// Consumes the hc layout above; no conversion.
 template <bool inplace>
 class fft_implementation<1, float, false, true, inplace> : public fft_impl<float>
 {
@@ -88,9 +91,10 @@ public:
         work  = static_cast<float*>(pffft_aligned_malloc(N * sizeof(float)));
     }
 
+    real_layout layout() const final { return real_layout::hc; }
+
     void execute(float* out, const float* in)
     {
-        const_cast<float*>(in)[1] = in[N];
         pffft_transform_ordered(setup, in, out, work, PFFFT_BACKWARD);
     }
 

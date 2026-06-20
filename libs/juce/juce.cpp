@@ -47,6 +47,7 @@ public:
         fft.perform(reinterpret_cast<const juce::dsp::Complex<float>*>(in),
                     reinterpret_cast<juce::dsp::Complex<float>*>(out), invert);
     }
+    fft_scaling scaling() const final { return fft_scaling::inverse_n; }
 
 private:
     size_t N;
@@ -61,6 +62,7 @@ public:
     fft_implementation(sizes_t<1> sizes) : N(sizes[0]), fft(log2_exact(sizes[0])) {}
 
     void execute(float* out, const float*) { fft.performRealOnlyForwardTransform(out); }
+    fft_scaling scaling() const final { return fft_scaling::inverse_n; }
 
 private:
     size_t N;
@@ -75,6 +77,7 @@ public:
     fft_implementation(sizes_t<1> sizes) : N(sizes[0]), fft(log2_exact(sizes[0])) {}
 
     void execute(float* out, const float*) { fft.performRealOnlyInverseTransform(out); }
+    fft_scaling scaling() const final { return fft_scaling::inverse_n; }
 
 private:
     size_t N;
@@ -114,8 +117,8 @@ struct src_implementation<float> : public src_impl<float>
 {
     src_implementation(unsigned out_rate, unsigned in_rate, unsigned seconds)
     {
-        out_length = out_rate * seconds;
-        in_length  = in_rate * seconds;
+        out_length  = out_rate * seconds;
+        in_length   = in_rate * seconds;
         speed_ratio = static_cast<double>(in_rate) / static_cast<double>(out_rate);
         interpolator.reset();
     }
