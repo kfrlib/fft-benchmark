@@ -65,7 +65,11 @@ public:
 
     bool valid_setup() const { return isetup != nullptr || zsetup != nullptr; }
 
-    fft_scaling scaling() const final { return fft_scaling::vdsp; }
+    // vDSP's complex DFT (Interleaved and zop) is unnormalized in both
+    // directions: forward produces the standard DFT sum (no 2x factor), and
+    // inverse is also unnormalized. The 2x factor only applies to the real
+    // zrop forward transform, so the complex path reports `none` here.
+    fft_scaling scaling() const final { return fft_scaling::none; }
 
     void execute(real* out, const real* in)
     {
