@@ -13,7 +13,7 @@ jobs:
           sudo apt-get update && sudo apt-get install -y wget cmake ninja-build build-essential unzip libomp-dev clang
       - name: Clone KFR
         run: |
-          git clone --branch fft-new --depth 1 https://github.com/kfrlib/kfr.git ${{ runner.temp }}/kfr
+          git clone --branch dev --depth 1 https://github.com/kfrlib/kfr.git ${{ runner.temp }}/kfr
       - name: Build benchmark
         run: |
           cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DKFR_SRC_DIR=${{ runner.temp }}/kfr" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DSINGLE=kfr -DVCPKG_MANIFEST_INSTALL=OFF
@@ -53,7 +53,7 @@ jobs:
           sudo apt-get update && sudo apt-get install -y wget cmake ninja-build build-essential unzip libomp-dev clang
       - name: Clone KFR
         run: |
-          git clone --branch fft-new --depth 1 https://github.com/kfrlib/kfr.git ${{ runner.temp }}/kfr
+          git clone --branch dev --depth 1 https://github.com/kfrlib/kfr.git ${{ runner.temp }}/kfr
       - name: Build benchmark
         run: |
           cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DKFR_SRC_DIR=${{ runner.temp }}/kfr" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DSINGLE=kfr -DVCPKG_MANIFEST_INSTALL=OFF
@@ -92,7 +92,7 @@ jobs:
           brew install cmake ninja libomp
       - name: Clone KFR
         run: |
-          git clone --branch fft-new --depth 1 https://github.com/kfrlib/kfr.git ${{ runner.temp }}/kfr
+          git clone --branch dev --depth 1 https://github.com/kfrlib/kfr.git ${{ runner.temp }}/kfr
       - name: Build benchmark
         run: |
           cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -GNinja "-DKFR_SRC_DIR=${{ runner.temp }}/kfr" -DSINGLE=kfr -DVCPKG_MANIFEST_INSTALL=OFF
@@ -128,7 +128,7 @@ jobs:
           submodules: recursive
       - name: Clone KFR
         run: |
-          git clone --branch fft-new --depth 1 https://github.com/kfrlib/kfr.git ${{ runner.temp }}\kfr
+          git clone --branch dev --depth 1 https://github.com/kfrlib/kfr.git ${{ runner.temp }}\kfr
       - name: Build benchmark
         run: |
           & 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\Launch-VsDevShell.ps1' -Arch amd64 -HostArch amd64
