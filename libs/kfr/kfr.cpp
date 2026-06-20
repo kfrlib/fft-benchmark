@@ -185,15 +185,14 @@ private:
 template <typename real>
 fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, bool is_complex, bool invert, bool inplace)
 {
-    // kfr::fft_ng        = true;
-    // kfr::fft_ng_decomp = kfr::internal_generic::dft_decomp::dit;
-    // kfr::fft_autosort = false;
+#ifndef KFR_DFT_SUPPORTS_ODD_REAL
     if (!is_complex)
     {
         size_t s = std::accumulate(size.begin(), size.end(), size_t(1), std::multiplies<>{});
         if (s & 1)
             return nullptr; // KFR real transform requires even sizes
     }
+#endif
     return fft_create_for<fft_implementation, real>(size, is_complex, invert, inplace);
 }
 
