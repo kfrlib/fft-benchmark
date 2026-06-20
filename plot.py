@@ -4,28 +4,37 @@ import numpy as np
 import math
 import sys
 
+common_style = {
+    'linestyle': '-',
+    'markersize': 10.0,
+    'markeredgewidth': 2.0,
+    'markeredgecolor': '#FFFFFF'
+}
+
+# Define unique markers for each dataset
+markers = [
+    'o', 'D', 's'
+]
+
+# Define unique styles for each dataset
+styles = [
+    dict(color="#A8021D", marker=markers[0], **common_style),
+    dict(color='#00A6ED', marker=markers[1], **common_style),
+    dict(color='#36cccc', marker=markers[2], **common_style),
+    dict(color='#FFB400', marker=markers[0], **common_style),
+    dict(color='#F6511D', marker=markers[1], **common_style),
+    dict(color='#e9c46a', marker=markers[2], **common_style),
+    dict(color='#983fd3', marker=markers[0], **common_style),
+    dict(color='#db37af', marker=markers[1], **common_style),
+    dict(color='#5430e4', marker=markers[2], **common_style),
+    dict(color='#7FB800', marker=markers[0], **common_style),
+    dict(color="#d4388b", marker=markers[1], **common_style),
+    dict(color='#2a9d8f', marker=markers[2], **common_style),
+]
+
 # Function to plot the data
 def plot(data, ticks, labels, title, topy, file=None):
     # Define common styles for the plot
-    common_style = {
-        'linestyle': '-',
-        'marker': 'o',
-        'markersize': 10.0,
-        'markeredgewidth': 2.0,
-        'markeredgecolor': '#FFFFFF'
-    }
-
-    # Define unique styles for each dataset
-    styles = [
-        dict(color='#F6511D', **common_style),
-        dict(color='#7FB800', **common_style),
-        dict(color='#00A6ED', **common_style),
-        dict(color='#FFB400', **common_style),
-        dict(color='#983fd3', **common_style),
-        dict(color='#36cccc', **common_style),
-        dict(color='#db37af', **common_style),
-        dict(color='#5430e4', **common_style),
-    ]
 
     # Define grid style
     grid_style = {'color': '#777777'}
@@ -63,7 +72,7 @@ def plot(data, ticks, labels, title, topy, file=None):
     if not file:
         plt.show()
     else:
-        plt.savefig(file, dpi=125)
+        plt.savefig(file, dpi=192)
 
 # Get input files from command-line arguments
 files = sys.argv[1:]
@@ -74,6 +83,58 @@ print("Processing files: ", files)
 
 # Load JSON data from the input files
 results = [json.load(open(f)) for f in files]
+
+# Ensure "cpu" is the same across all passed .json files
+cpus = {r.get('cpu') for r in results}
+if len(cpus) > 1:
+    sys.exit("Inconsistent 'cpu' fields across input files: " + ", ".join(repr(c) for c in cpus))
+
+# Merge files with the same "library". When multiple values are provided for
+# the same set of params (size, data, type, direction, buffer), compute the
+# median of those values.
+from collections import defaultdict
+
+# Group results by library name, sorted alphabetically so the same color
+# is assigned to a given library regardless of the .json argument order.
+merged_results = []
+groups = defaultdict(list)
+for r in results:
+    groups[r['library']].append(r)
+
+for lib in sorted(groups, key=str.lower):
+    group = groups[lib]
+    # Bucket performance entries by (size, data, type, direction, buffer)
+    buckets = defaultdict(list)
+    for r in group:
+        for entry in r['performance']:
+            key = (entry['size'], entry['data'], entry['type'],
+                   entry['direction'], entry['buffer'])
+            buckets[key].append(entry)
+
+    merged_performance = []
+    for key, entries in buckets.items():
+        # Pick a representative entry (first one) and replace gflops/best_time/
+        # median_time with the median across the merged entries.
+        merged = dict(entries[0])
+        for field in ('gflops', 'best_time', 'median_time'):
+            vals = [e[field] for e in entries if field in e]
+            if vals:
+                merged[field] = float(np.median(vals))
+        merged_performance.append(merged)
+
+    # Sort by size for deterministic output
+    merged_performance.sort(key=lambda e: (e['size'], e['data'], e['type'],
+                                           e['direction'], e['buffer']))
+
+    merged_results.append({
+        'cpu': group[0].get('cpu'),
+        'clock_MHz': group[0].get('clock_MHz'),
+        'library': lib,
+        'accuracy': [a for r in group for a in r.get('accuracy', [])],
+        'performance': merged_performance,
+    })
+
+results = merged_results
 
 # Extract library names and all results
 libraries = [r['library'] for r in results]
@@ -97,7 +158,6 @@ for data in ['float', 'double']:
                 for buffer in ['inplace', 'outofplace']:
                     # Generate the plot title
                     title = f'{data}-{type}-{direction}-{buffer}'
-                    print("Generating plot: ", title)
 
                     # Extract sizes and values for the current configuration
                     sizes = [
@@ -109,6 +169,13 @@ for data in ['float', 'double']:
                         if x['data'] == data and x['type'] == type and x['direction'] == direction and x['buffer'] == buffer]
                         for r in results
                     ]
+
+                    # Skip plot generation if no data was collected for these parameters
+                    if not sizes or not any(values):
+                        print(f"Skipping plot (no data): ", title)
+                        continue
+
+                    print("Generating plot: ", title)
 
                     # Generate the plot
                     plot(values, sizes, libraries, title, topy, 'plots/' + title + '.svg')

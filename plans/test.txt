@@ -1,1 +1,1 @@
---accuracy --complex yn --inverse n --inplace yn 4096
+--accuracy --complex yn --inverse n --inplace y 4096
