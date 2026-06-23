@@ -28,7 +28,7 @@ jobs:
       - name: Install LLVM 22
         run: |
           wget -O - https://apt.llvm.org/llvm.sh | sudo bash -s - 22
-          sudo apt install -y llvm-22
+          sudo apt install -y llvm-22 libomp-22-dev
           for tool in clang clang++ llvm-ar ld.lld llvm-nm llvm-objcopy llvm-objdump llvm-ranlib; do
             sudo update-alternatives --install /usr/bin/$tool $tool /usr/lib/llvm-22/bin/$tool 180
             sudo update-alternatives --set $tool /usr/lib/llvm-22/bin/$tool
@@ -109,7 +109,7 @@ jobs:
       - name: Install LLVM 22
         run: |
           wget -O - https://apt.llvm.org/llvm.sh | sudo bash -s - 22
-          sudo apt install -y llvm-22
+          sudo apt install -y llvm-22 libomp-22-dev
           for tool in clang clang++ llvm-ar ld.lld llvm-nm llvm-objcopy llvm-objdump llvm-ranlib; do
             sudo update-alternatives --install /usr/bin/$tool $tool /usr/lib/llvm-22/bin/$tool 180
             sudo update-alternatives --set $tool /usr/lib/llvm-22/bin/$tool
