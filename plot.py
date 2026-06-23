@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MultipleLocator
 import json
 import numpy as np
 import math
@@ -6,9 +7,10 @@ import sys
 
 common_style = {
     'linestyle': '-',
-    'markersize': 10.0,
-    'markeredgewidth': 2.0,
-    'markeredgecolor': '#FFFFFF'
+    'markersize': 8.0,
+    'markeredgewidth': 1.25,
+    'markeredgecolor': '#FFFFFF',
+    'linewidth': 1.25,
 }
 
 # Define unique markers for each dataset
@@ -19,17 +21,18 @@ markers = [
 # Define unique styles for each dataset
 styles = [
     dict(color="#A8021D", marker=markers[0], **common_style),
-    dict(color='#00A6ED', marker=markers[1], **common_style),
     dict(color='#36cccc', marker=markers[2], **common_style),
+    dict(color='#00A6ED', marker=markers[1], **common_style),
     dict(color='#FFB400', marker=markers[0], **common_style),
-    dict(color='#F6511D', marker=markers[1], **common_style),
-    dict(color='#e9c46a', marker=markers[2], **common_style),
-    dict(color='#983fd3', marker=markers[0], **common_style),
-    dict(color='#db37af', marker=markers[1], **common_style),
-    dict(color='#5430e4', marker=markers[2], **common_style),
-    dict(color='#7FB800', marker=markers[0], **common_style),
-    dict(color="#d4388b", marker=markers[1], **common_style),
-    dict(color='#2a9d8f', marker=markers[2], **common_style),
+    dict(color="#FF8964", marker=markers[2], **common_style),
+    dict(color="#EF3608", marker=markers[1], **common_style),
+    dict(color='#e9c46a', marker=markers[0], **common_style),
+    dict(color='#983fd3', marker=markers[1], **common_style),
+    dict(color='#db37af', marker=markers[2], **common_style),
+    dict(color='#5430e4', marker=markers[0], **common_style),
+    dict(color='#7FB800', marker=markers[1], **common_style),
+    dict(color="#d4388b", marker=markers[2], **common_style),
+    dict(color='#2a9d8f', marker=markers[0], **common_style),
 ]
 
 # Function to plot the data
@@ -46,20 +49,32 @@ def plot(data, ticks, labels, title, topy, file=None):
     # Enable grid with the defined style
     ax.grid(True, **grid_style)
 
-    # Plot each dataset with its corresponding style and label
+    # Add thin dotted minor grid lines at every gigaflop
+    ax.yaxis.set_minor_locator(MultipleLocator(1))
+    ax.grid(True, which='minor', axis='y', color='#888888',
+            linestyle=':', linewidth=0.5, zorder=0)
+
+    # Plot each dataset with its corresponding style and label.
+    # Datasets with no data are skipped (so they don't appear in the
+    # legend), but the style index is kept in sync with the dataset
+    # index so colors are not reassigned to other libraries.
     x = None
-    for d, s, l in zip(data, styles, labels):
-        ax.set_xlabel('size')
-        ax.set_ylabel('gflops')
+    for i, (d, s, l) in enumerate(zip(data, styles, labels)):
+        ax.set_xlabel('FFT size')
+        ax.set_ylabel('GFlops')
+        # Skip datasets that have no data points (empty list or all-None),
+        # so their library name does not show up in the legend.
+        if not d or all(v is None for v in d):
+            continue
         x = np.linspace(0, len(d), len(d), False)
-        ax.plot(x, d, linewidth=1.6, label=l, **s)
+        ax.plot(x, d, label=(l[:26] + '…') if len(l) > 27 else l, **s)
 
     # Set y-axis limits
     ax.set_ylim(bottom=0.0)
     ax.set_ylim(top=topy)
 
     # Add legend at the bottom center
-    ax.legend(loc='lower center', shadow=True)
+    ax.legend(loc='upper right', shadow=True)
 
     # Adjust x-axis ticks
     if x is not None:  # Ensure x is defined before using it
@@ -157,7 +172,7 @@ for data in ['float', 'double']:
             for direction in ['forward', 'inverse']:
                 for buffer in ['inplace', 'outofplace']:
                     # Generate the plot title
-                    title = f'{data}-{type}-{direction}-{buffer}'
+                    title = f'{data.capitalize()} {type.capitalize()} {direction.capitalize()} {"In-place" if buffer == "inplace" else "Out-of-place"} FFT'
 
                     # Extract sizes and values for the current configuration
                     sizes = [

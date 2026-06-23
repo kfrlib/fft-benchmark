@@ -25,6 +25,14 @@ jobs:
       - name: Packages
         run: |
           sudo apt-get update && sudo apt-get install -y wget cmake gnupg2 ninja-build build-essential unzip libx11-dev libxcomposite-dev libxext-dev libasound2-dev libfontconfig1-dev libglu1-mesa-dev mesa-common-dev libcurl4-openssl-dev libomp-dev clang
+      - name: Install LLVM 22
+        run: |
+          wget -O - https://apt.llvm.org/llvm.sh | sudo bash -s - 22
+          sudo apt install -y llvm-22
+          for tool in clang clang++ llvm-ar ld.lld llvm-nm llvm-objcopy llvm-objdump llvm-ranlib; do
+            sudo update-alternatives --install /usr/bin/$tool $tool /usr/lib/llvm-22/bin/$tool 180
+            sudo update-alternatives --set $tool /usr/lib/llvm-22/bin/$tool
+          done
       - name: Bootstrap local vcpkg
         run: |
           ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
@@ -98,6 +106,14 @@ jobs:
       - name: Packages
         run: |
           sudo apt-get update && sudo apt-get install -y wget cmake gnupg2 ninja-build build-essential unzip libx11-dev libxcomposite-dev libxext-dev libasound2-dev libfontconfig1-dev libglu1-mesa-dev mesa-common-dev libcurl4-openssl-dev libomp-dev clang
+      - name: Install LLVM 22
+        run: |
+          wget -O - https://apt.llvm.org/llvm.sh | sudo bash -s - 22
+          sudo apt install -y llvm-22
+          for tool in clang clang++ llvm-ar ld.lld llvm-nm llvm-objcopy llvm-objdump llvm-ranlib; do
+            sudo update-alternatives --install /usr/bin/$tool $tool /usr/lib/llvm-22/bin/$tool 180
+            sudo update-alternatives --set $tool /usr/lib/llvm-22/bin/$tool
+          done
       - name: Bootstrap local vcpkg
         run: |
           ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
@@ -242,6 +258,9 @@ jobs:
       - name: Bootstrap local vcpkg
         run: |
           .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+      - name: Install LLVM 22
+        run: |
+          choco install llvm --version 22.1.7 --no-progress -y
       - name: Get KFR7 binaries
         env:
           TMP_DIR: ${{ runner.temp }}

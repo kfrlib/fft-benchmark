@@ -11,6 +11,14 @@ jobs:
       - name: Packages
         run: |
           sudo apt-get update && sudo apt-get install -y wget cmake ninja-build build-essential unzip libomp-dev clang
+      - name: Install LLVM 22
+        run: |
+          wget -O - https://apt.llvm.org/llvm.sh | sudo bash -s - 22
+          sudo apt install -y llvm-22
+          for tool in clang clang++ llvm-ar ld.lld llvm-nm llvm-objcopy llvm-objdump llvm-ranlib; do
+            sudo update-alternatives --install /usr/bin/$tool $tool /usr/lib/llvm-22/bin/$tool 180
+            sudo update-alternatives --set $tool /usr/lib/llvm-22/bin/$tool
+          done
       - name: Clone KFR
         run: |
           git clone --branch dev --depth 1 https://github.com/kfrlib/kfr.git ${{ runner.temp }}/kfr
@@ -51,6 +59,14 @@ jobs:
       - name: Packages
         run: |
           sudo apt-get update && sudo apt-get install -y wget cmake ninja-build build-essential unzip libomp-dev clang
+      - name: Install LLVM 22
+        run: |
+          wget -O - https://apt.llvm.org/llvm.sh | sudo bash -s - 22
+          sudo apt install -y llvm-22
+          for tool in clang clang++ llvm-ar ld.lld llvm-nm llvm-objcopy llvm-objdump llvm-ranlib; do
+            sudo update-alternatives --install /usr/bin/$tool $tool /usr/lib/llvm-22/bin/$tool 180
+            sudo update-alternatives --set $tool /usr/lib/llvm-22/bin/$tool
+          done
       - name: Clone KFR
         run: |
           git clone --branch dev --depth 1 https://github.com/kfrlib/kfr.git ${{ runner.temp }}/kfr
@@ -129,6 +145,9 @@ jobs:
       - name: Clone KFR
         run: |
           git clone --branch dev --depth 1 https://github.com/kfrlib/kfr.git ${{ runner.temp }}\kfr
+      - name: Install LLVM 22
+        run: |
+          choco install llvm --version 22.1.7 --no-progress -y
       - name: Build benchmark
         run: |
           & 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\Launch-VsDevShell.ps1' -Arch amd64 -HostArch amd64
