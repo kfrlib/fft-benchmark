@@ -15,8 +15,6 @@ using namespace bm;
 
 #define NOMINMAX 1
 
-bool avx2only = false;
-
 std::string executable;
 
 // Largest power of 2 <= n (C++17-compatible replacement for std::bit_floor)
@@ -377,10 +375,6 @@ int main(int argc, char** argv)
         else if (argv[i] == "--no-banner"sv)
         {
             banner = false;
-        }
-        else if (argv[i] == "--avx2-only"sv)
-        {
-            avx2only = true;
         }
         else if (argv[i] == "--"sv)
         {

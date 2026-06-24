@@ -18,17 +18,6 @@
 std::string fft_name()
 {
     ippInit();
-#if defined(__x86_64__) || defined(_M_X64)
-    if (avx2only)
-    {
-        fprintf(stderr, "IPP: enabling AVX2\n");
-        ippSetCpuFeatures(ippCPUID_MMX | ippCPUID_SSE | ippCPUID_SSE2 | ippCPUID_SSE3 | ippCPUID_SSSE3 |
-                          ippCPUID_MOVBE | ippCPUID_SSE41 | ippCPUID_SSE42 | ippCPUID_AES | ippCPUID_CLMUL |
-                          ippCPUID_SHA | ippCPUID_AVX | ippAVX_ENABLEDBYOS | ippCPUID_RDRAND | ippCPUID_F16C |
-                          ippCPUID_AVX2 | ippCPUID_MOVBE | ippCPUID_ADCOX | ippCPUID_RDSEED |
-                          ippCPUID_PREFETCHW);
-    }
-#endif
 
     const IppLibraryVersion* ver = ippsGetLibVersion();
     return std::string(ver->Name) + ver->Version;
@@ -160,17 +149,6 @@ template std::unique_ptr<fft_impl<double>> fft_create<double>(const std::vector<
 std::string src_name()
 {
     ippInit();
-#if defined(__x86_64__) || defined(_M_X64)
-    if (avx2only)
-    {
-        fprintf(stderr, "IPP: enabling AVX2\n");
-        ippSetCpuFeatures(ippCPUID_MMX | ippCPUID_SSE | ippCPUID_SSE2 | ippCPUID_SSE3 | ippCPUID_SSSE3 |
-                          ippCPUID_MOVBE | ippCPUID_SSE41 | ippCPUID_SSE42 | ippCPUID_AES | ippCPUID_CLMUL |
-                          ippCPUID_SHA | ippCPUID_AVX | ippAVX_ENABLEDBYOS | ippCPUID_RDRAND | ippCPUID_F16C |
-                          ippCPUID_AVX2 | ippCPUID_MOVBE | ippCPUID_ADCOX | ippCPUID_RDSEED |
-                          ippCPUID_PREFETCHW);
-    }
-#endif
     const IppLibraryVersion* ver = ippsGetLibVersion();
     return std::string(ver->Name) + ver->Version;
 }

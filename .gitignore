@@ -17,5 +17,6 @@ img
 
 data
 plots
+plots-*
 vcpkg_installed
 venv

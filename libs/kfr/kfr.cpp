@@ -20,13 +20,6 @@ const char* library_version_dsp();
 
 std::string fft_name()
 {
-#if defined(__x86_64__) || defined(_M_X64)
-    if (avx2only)
-    {
-        fprintf(stderr, "KFR: enabling AVX2\n");
-        kfr::override_cpu(kfr::cpu_t::avx2);
-    }
-#endif
     return std::string(kfr::library_version_dft());
 }
 
@@ -211,13 +204,6 @@ std::string src_name()
     printf("sidelobe attenuation: %f dB, transition width: %f radians, filter order: %u, param = %f\n", att,
            trans, order, param);
 
-#if defined(__x86_64__) || defined(_M_X64)
-    if (avx2only)
-    {
-        fprintf(stderr, "KFR: enabling AVX2\n");
-        kfr::override_cpu(kfr::cpu_t::avx2);
-    }
-#endif
     return std::string(kfr::library_version_dsp());
 }
 

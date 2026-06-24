@@ -429,7 +429,6 @@ static bool progress   = true;
 static bool banner     = true;
 static bool accuracy   = false;
 static double duration = 2.0;
-bool avx2only          = false;
 static std::vector<std::vector<size_t>> sizes;
 static std::vector<bool> is_complex_list{ true };
 static std::vector<bool> inverse_list{ false };
@@ -568,10 +567,6 @@ int main(int argc, char** argv)
                 duration = std::stod(expanded_args[i + 1]);
                 ++i;
             }
-        }
-        else if (arg == "--avx2-only"sv)
-        {
-            avx2only = true;
         }
         else if (arg == "--"sv)
         {

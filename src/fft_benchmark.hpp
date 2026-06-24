@@ -251,8 +251,6 @@ inline std::vector<bool> to_vector_bool(std::string_view s)
     return result;
 }
 
-extern bool avx2only;
-
 // Normalization convention used by a library's transform.
 //
 // Wrappers must disable any library-side scaling when the library exposes a
