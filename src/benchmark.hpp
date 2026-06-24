@@ -186,6 +186,7 @@ struct benchmark_scope
 
 static void bench_start();
 static std::chrono::nanoseconds bench_stop();
+int get_ideal_core();
 
 namespace details
 {
@@ -197,7 +198,11 @@ BENCH_INLINE void full_barrier()
     std::atomic_thread_fence(std::memory_order_seq_cst);
 #endif
 }
+#if defined(USE_OS_TIME)
+extern std::chrono::nanoseconds start_time;
+#else
 extern uint64_t start_time;
+#endif
 } // namespace details
 
 #if defined(_WIN32)
@@ -292,15 +297,11 @@ BENCH_INLINE static double tsc_resolution()
 #if defined(USE_OS_TIME)
 BENCH_INLINE static void bench_start()
 {
-    details::full_barrier();
     details::start_time = os_time();
-    details::full_barrier();
 }
 BENCH_INLINE static std::chrono::nanoseconds bench_stop()
 {
-    details::full_barrier();
     std::chrono::nanoseconds stop_time = os_time();
-    details::full_barrier();
     return stop_time - details::start_time;
 }
 #else

@@ -1,6 +1,7 @@
 # build directory
 build
 build/
+build-*
 bin/
 
 ipp/*
@@ -8,7 +9,7 @@ fftw/*
 kissfft/*
 kfr/*
 
-data*
+data-*
 include
 
 .cache

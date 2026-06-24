@@ -181,7 +181,11 @@ void terminate_spin_thread()
 
 #endif
 
+#if defined(USE_OS_TIME)
+std::chrono::nanoseconds start_time;
+#else
 uint64_t start_time;
+#endif
 
 double tsc_scale = 0;
 
@@ -260,6 +264,7 @@ static int old_qos_relative_priority;
 
 static int ideal_core = 2;
 void run_on_core(int core) { ideal_core = core; }
+int get_ideal_core() { return ideal_core; }
 
 benchmark_scope::benchmark_scope()
 {
@@ -267,8 +272,17 @@ benchmark_scope::benchmark_scope()
     HANDLE thrd = GetCurrentThread();
     old_prio    = GetThreadPriority(thrd);
     // printf("Setting realtime priority and affinity to core %d\n", ideal_core);
-    SetPriorityClass(GetCurrentProcess(), REALTIME_PRIORITY_CLASS);
-    SetThreadPriority(thrd, THREAD_PRIORITY_HIGHEST);
+    if (!SetPriorityClass(GetCurrentProcess(), REALTIME_PRIORITY_CLASS) ||
+        !SetThreadPriority(thrd, THREAD_PRIORITY_TIME_CRITICAL))
+    {
+        fprintf(stderr, "Failed to set realtime priority\n");
+        if (!SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS) ||
+            !SetThreadPriority(thrd, THREAD_PRIORITY_HIGHEST))
+        {
+            fprintf(stderr, "Failed to set high priority\n");
+            std::abort();
+        }
+    }
     old_affmask = SetThreadAffinityMask(thrd, 1ull << ideal_core);
 
 #if 0

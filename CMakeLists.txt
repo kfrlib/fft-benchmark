@@ -1,7 +1,15 @@
 cmake_minimum_required(VERSION 3.12)
 
+# cmake_policy(SET CMP0091 NEW) # Forces CMake to respect MSVC_RUNTIME_LIBRARY
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_EXTENSIONS ON)
+
+# add_compile_definitions(USE_OS_TIME=1)
+
+if (WIN32)
+    add_link_options(/DYNAMICBASE:NO)
+endif ()
 
 if (APPLE)
     list(APPEND CMAKE_PREFIX_PATH /opt/homebrew/opt/libomp)

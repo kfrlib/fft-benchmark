@@ -24,7 +24,7 @@ styles = [
     dict(color='#36cccc', marker=markers[2], **common_style),
     dict(color='#00A6ED', marker=markers[1], **common_style),
     dict(color='#FFB400', marker=markers[0], **common_style),
-    dict(color="#FF8964", marker=markers[2], **common_style),
+    # dict(color="#FF8964", marker=markers[2], **common_style),
     dict(color="#EF3608", marker=markers[1], **common_style),
     dict(color='#e9c46a', marker=markers[0], **common_style),
     dict(color='#983fd3', marker=markers[1], **common_style),

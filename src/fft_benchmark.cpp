@@ -19,6 +19,10 @@
 #include "json.hpp"
 #include <fstream>
 
+#if defined(__ARM_NEON) || defined(__ARM_NEON__)
+#include <arm_neon.h>
+#endif
+
 extern "C" const double dft_testvector_complex_input60[];
 extern "C" const double dft_testvector_complex_output60[];
 extern "C" const double dft_testvector_complex_input61[];
@@ -58,12 +62,26 @@ constexpr inline const char* inplace_str(bool inplace)
         return "outofplace";
 }
 
-// #define SYNTHETIC_WORKLOAD
-
-#ifdef SYNTHETIC_WORKLOAD
-
-[[clang::noinline]] void synthetic_fma(long long iterations)
+[[clang::noinline]] void synthetic_workload(long long iterations)
 {
+#ifdef __AVX512F__
+    __m512 a = _mm512_set1_ps(1.00001f);
+    __m512 b = _mm512_set1_ps(0.99999f);
+    __m512 c = _mm512_set1_ps(0.50000f);
+    __m512 d = _mm512_set1_ps(1.41421f);
+
+    for (long long i = 0; i < iterations; i++)
+    {
+        a = _mm512_fmadd_ps(a, b, c); // port 0
+        b = _mm512_fmadd_ps(b, c, d); // port 1
+        c = _mm512_fmadd_ps(c, d, a); // back-dep on a
+        d = _mm512_fmadd_ps(d, a, b); // back-dep on a,b
+    }
+
+    volatile float sink =
+        _mm512_cvtss_f32(a) + _mm512_cvtss_f32(b) + _mm512_cvtss_f32(c) + _mm512_cvtss_f32(d);
+    (void)sink;
+#elif defined __AVX2__
     __m256 a = _mm256_set1_ps(1.00001f);
     __m256 b = _mm256_set1_ps(0.99999f);
     __m256 c = _mm256_set1_ps(0.50000f);
@@ -80,37 +98,55 @@ constexpr inline const char* inplace_str(bool inplace)
     volatile float sink =
         _mm256_cvtss_f32(a) + _mm256_cvtss_f32(b) + _mm256_cvtss_f32(c) + _mm256_cvtss_f32(d);
     (void)sink;
-}
-#endif
+#elif defined(__ARM_NEON) || defined(__ARM_NEON__)
+    float32x4_t a = vdupq_n_f32(1.00001f);
+    float32x4_t b = vdupq_n_f32(0.99999f);
+    float32x4_t c = vdupq_n_f32(0.50000f);
+    float32x4_t d = vdupq_n_f32(1.41421f);
 
-template <typename real>
-BENCH_INLINE void preheat_fft(fft_impl<real>* fft, real* out, const real* in, size_t inner_iterations)
-{
-    for (int i = 0; i < inner_iterations; ++i)
+    for (long long i = 0; i < iterations; i++)
     {
-        fft->execute(out, in);
-        dont_optimize(out);
+        a = vfmaq_f32(a, b, c); // FMA0
+        b = vfmaq_f32(b, c, d); // FMA1
+        c = vfmaq_f32(c, d, a); // back-dep on a
+        d = vfmaq_f32(d, a, b); // back-dep on a,b
     }
-}
 
-template <typename real>
-BENCH_INLINE std::chrono::nanoseconds measure_fft(fft_impl<real>* fft, real* out, const real* in,
-                                                  size_t fft_size, size_t inner_iterations)
-{
-#ifdef SYNTHETIC_WORKLOAD
-    uint64_t iter = std::log2(fft_size) * fft_size / 10;
-#endif
-    bench_start();
-    for (int i = 0; i < inner_iterations; ++i)
-    {
-#ifdef SYNTHETIC_WORKLOAD
-        synthetic_fma(iter);
+    volatile float sink =
+        vgetq_lane_f32(a, 0) + vgetq_lane_f32(b, 0) + vgetq_lane_f32(c, 0) + vgetq_lane_f32(d, 0);
+    (void)sink;
 #else
-        fft->execute(out, in);
+#error "No synthetic workload implementation for this architecture"
 #endif
-        dont_optimize(out);
+}
+
+template <typename real>
+BENCH_INLINE std::chrono::nanoseconds batch(fft_impl<real>* fft, real* out, const real* in,
+                                            unsigned batch_size, bool inplace, size_t real_size)
+{
+    std::chrono::nanoseconds result;
+    if (inplace)
+    {
+        bench_start();
+        for (unsigned i = 0; i < batch_size; ++i)
+        {
+            memcpy(out, in, sizeof(real) * real_size);
+            fft->execute(out, out);
+            dont_optimize(out);
+        }
+        result = bench_stop();
     }
-    return bench_stop();
+    else
+    {
+        bench_start();
+        for (unsigned i = 0; i < batch_size; ++i)
+        {
+            fft->execute(out, in);
+            dont_optimize(out);
+        }
+        result = bench_stop();
+    }
+    return result;
 }
 
 template <typename real>
@@ -307,8 +343,9 @@ struct fft_benchmark_runner
     }
 
     static void benchmark(std::vector<size_t> sizes, bool is_complex, bool inverse, bool inplace,
-                          bool progress, double benchmark_duration = 2)
+                          bool progress)
     {
+        using namespace std::chrono_literals;
         json_open_object();
         json_key("size");
         if (sizes.size() == 1)
@@ -351,41 +388,52 @@ struct fft_benchmark_runner
         size_t allocation_size = size * 4 + 2;
         real* in               = aligned_malloc<real>(allocation_size);
         real* out              = aligned_malloc<real>(allocation_size);
-        fill_random(in, size * 2);
-        if (inplace)
-            std::copy(in, in + size * 2, out);
+        size_t real_in_size    = is_complex ? size * 2
+                                 : !inverse ? size
+                                            : real_spectrum_size(size, fft->layout());
         std::chrono::nanoseconds total_duration(0);
         uint64_t total_calls = 0;
         std::vector<double> batch_times; // per-call time (seconds) for each batch
 
-        size_t inner_iterations = size <= 256 ? 100 : size <= 262144 ? 10 : 1;
-
         std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
-        while (std::chrono::steady_clock::now() - start_time <
-               std::chrono::duration<double>(benchmark_duration / 4))
+        std::chrono::nanoseconds warmup_duration(0);
+        unsigned warmup_calls = 0;
+        while (std::chrono::steady_clock::now() - start_time < std::chrono::duration<double>(0.05))
         {
-            preheat_fft(fft.get(), out, inplace ? out : in, inner_iterations);
+            warmup_duration += batch(fft.get(), out, in, 1, inplace, real_in_size);
+            warmup_calls++;
         }
+        std::chrono::duration<double> call_duration = warmup_duration / warmup_calls;
+        unsigned batch_size  = static_cast<unsigned>(std::max(1.0, ceil(100us / call_duration)));
+        unsigned num_batches = static_cast<unsigned>(std::max(ceil(50ms / call_duration) / batch_size, 10.0));
+        const unsigned extra_batches = num_batches;
 
-        for (;;)
+        unsigned b = 0;
+        for (; b < num_batches + extra_batches; ++b)
         {
-            std::chrono::nanoseconds run_duration;
-            run_duration = measure_fft<real>(fft.get(), out, inplace ? out : in, size, inner_iterations);
-
-            total_duration += run_duration;
-            total_calls += inner_iterations;
-            batch_times.push_back(std::chrono::duration<double>(run_duration).count() / inner_iterations);
-
-            fill_random(in, size * 2);
-            if (inplace)
-                std::copy(in, in + size * 2, out);
-
-            if (total_calls / inner_iterations >= 10)
+            auto stat = get_percentiles(batch_times);
+            if (b >= num_batches && stat.p50_median / stat.p1 < 1.02)
             {
-                if (total_duration >= std::chrono::duration<double>(benchmark_duration))
-                    break;
+                break;
             }
+
+            // Create a new FFT object each time to randomize any internal state
+            fft = fft_create<real>(sizes, is_complex, inverse, inplace);
+            prng::generate<true>(in, real_in_size);
+            // prewarm the FFT object and buffers
+            batch(fft.get(), out, in, (batch_size + 1) / 2, inplace, real_in_size);
+            std::chrono::nanoseconds batch_duration =
+                batch(fft.get(), out, in, batch_size, inplace, real_in_size);
+
+            total_duration += batch_duration;
+            total_calls += batch_size;
+            batch_times.push_back(std::chrono::duration<double>(batch_duration).count() / batch_size);
         }
+        printf("    prewarm_call_duration=%.3fus guessed batch_size=%u num_batches=%u batches executed: %u, "
+               "total calls: "
+               "%" PRIu64 ", total time: %.3fs\n",
+               call_duration.count() * 1e6, batch_size, num_batches, b, total_calls,
+               std::chrono::duration<double>(total_duration).count());
 
         [[maybe_unused]] auto times                 = get_percentiles(batch_times);
         [[maybe_unused]] double opspersecond_median = 1.0 / times.p50_median;
@@ -428,8 +476,9 @@ static std::string outname;
 static bool progress   = true;
 static bool banner     = true;
 static bool accuracy   = false;
-static double duration = 2.0;
+static bool prewarm    = false;
 static std::vector<std::vector<size_t>> sizes;
+static std::vector<bool> is_double_list{ false, true };
 static std::vector<bool> is_complex_list{ true };
 static std::vector<bool> inverse_list{ false };
 static std::vector<bool> inplace_list{ true };
@@ -443,7 +492,7 @@ static void run_t(const std::vector<size_t>& sizes)
         {
             for (bool inplace : inplace_list)
             {
-                fft_benchmark_runner<real>::benchmark(sizes, complex, inverse, inplace, progress, duration);
+                fft_benchmark_runner<real>::benchmark(sizes, complex, inverse, inplace, progress);
             }
         }
     }
@@ -451,9 +500,10 @@ static void run_t(const std::vector<size_t>& sizes)
 
 static void run(const std::vector<size_t>& sizes)
 {
-    benchmark_scope scope;
-    run_t<float>(sizes);
-    run_t<double>(sizes);
+    if (std::find(is_double_list.begin(), is_double_list.end(), false) != is_double_list.end())
+        run_t<float>(sizes);
+    if (std::find(is_double_list.begin(), is_double_list.end(), true) != is_double_list.end())
+        run_t<double>(sizes);
 }
 
 int main(int argc, char** argv)
@@ -528,6 +578,14 @@ int main(int argc, char** argv)
         {
             accuracy = true;
         }
+        else if (arg == "--no-prewarm"sv)
+        {
+            prewarm = false;
+        }
+        else if (arg == "--prewarm"sv)
+        {
+            prewarm = true;
+        }
         else if (arg == "--no-banner"sv)
         {
             banner = false;
@@ -535,6 +593,14 @@ int main(int argc, char** argv)
         else if (arg == "--banner"sv)
         {
             banner = true;
+        }
+        else if (arg == "--double"sv)
+        {
+            if (i + 1 < expanded_args.size())
+            {
+                is_double_list = to_vector_bool(expanded_args[i + 1]);
+                ++i;
+            }
         }
         else if (arg == "--complex"sv)
         {
@@ -557,14 +623,6 @@ int main(int argc, char** argv)
             if (i + 1 < expanded_args.size())
             {
                 inverse_list = to_vector_bool(expanded_args[i + 1]);
-                ++i;
-            }
-        }
-        else if (arg == "--duration"sv)
-        {
-            if (i + 1 < expanded_args.size())
-            {
-                duration = std::stod(expanded_args[i + 1]);
                 ++i;
             }
         }
@@ -660,6 +718,14 @@ int main(int argc, char** argv)
             printf("%-6s %-7s %-9s %-10s %11s %10s | %14s%12s | %14s%12s | %7s\n", "data", "type",
                    "direction", "buffer", "size", "gflops", "best time", "(ops/sec)", "med. time",
                    "(ops/sec)", "calls");
+        }
+
+        benchmark_scope scope;
+        if (prewarm)
+        {
+            printf("Warming up the CPU with synthetic workload...");
+            synthetic_workload(10'000'000'000);
+            printf("ok\n");
         }
 
         for (auto size : sizes)

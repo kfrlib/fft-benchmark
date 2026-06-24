@@ -72,6 +72,12 @@ A separate executable is produced for each library found (e.g. `fft_benchmark_kf
 > [!NOTE]
 > All libraries are **optional** — if not found via CMake's `find_package`, they are simply disabled.
 
+> [!NOTE]
+> Linux prebuilt binaries published on GitHub Actions are built against glibc 2.34 (Ubuntu 22.04+, Debian 12+).
+
+> [!NOTE]
+> Windows builds require the [Visual Studio 2022 x64 redistributable packages](https://aka.ms/vs/17/release/vc_redist.x64.exe).
+
 ## Usage
 
 ```
