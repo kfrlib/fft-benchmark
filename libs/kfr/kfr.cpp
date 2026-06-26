@@ -18,10 +18,7 @@ const char* library_version_dft();
 const char* library_version_dsp();
 } // namespace kfr
 
-std::string fft_name()
-{
-    return std::string(kfr::library_version_dft());
-}
+std::string fft_name() { return std::string(kfr::library_version_dft()); }
 
 template <int Dims, typename real, bool is_complex, bool invert, bool inplace>
 class fft_implementation : public fft_impl_stub
@@ -49,13 +46,11 @@ public:
         {
             plan = kfr::dft_plan<real>(size[0]);
             temp = kfr::aligned_allocate<unsigned char>(plan.temp_size);
-            plan.dump();
         }
     }
 #else
         : plan(size[0]), temp(kfr::aligned_allocate<unsigned char>(plan.temp_size))
     {
-        plan.dump();
     }
 #endif
     void execute(real* out, const real* in) final

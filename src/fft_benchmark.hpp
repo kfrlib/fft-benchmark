@@ -79,9 +79,12 @@ inline size_t real_spectrum_size(size_t N, real_layout layout)
 {
     switch (layout)
     {
-    case real_layout::ccs:     return 2 * (N / 2 + 1);
-    case real_layout::fftpack: return N;
-    case real_layout::hc:      return N;
+    case real_layout::ccs:
+        return 2 * (N / 2 + 1);
+    case real_layout::fftpack:
+        return N;
+    case real_layout::hc:
+        return N;
     }
     return 2 * (N / 2 + 1);
 }
@@ -97,25 +100,34 @@ struct spectrum_error
 // 2*(N/2+1) reals). `scale` is applied to the reference. Returns RMS and max
 // error over the unique bins (DC, Nyquist if even, and the complex bins).
 template <typename real>
-inline spectrum_error compare_spectrum(const real* lib, size_t N, real_layout layout,
-                                       const double* ref_ccs, double scale)
+inline spectrum_error compare_spectrum(const real* lib, size_t N, real_layout layout, const double* ref_ccs,
+                                       double scale)
 {
-    const size_t half = N / 2;
-    const bool even   = (N % 2 == 0);
+    const size_t half  = N / 2;
+    const bool even    = (N % 2 == 0);
     const size_t nbins = even ? half - 1 : half; // complex bins k=1..nbins
 
     // Indices into the library's flat array.
     size_t lib_nyq, lib_bin1;
     switch (layout)
     {
-    case real_layout::ccs:     lib_nyq = 2 * half; lib_bin1 = 2; break;
-    case real_layout::fftpack: lib_nyq = N - 1;    lib_bin1 = 1; break;
-    case real_layout::hc:      lib_nyq = 1;        lib_bin1 = 2; break;
+    case real_layout::ccs:
+        lib_nyq  = 2 * half;
+        lib_bin1 = 2;
+        break;
+    case real_layout::fftpack:
+        lib_nyq  = N - 1;
+        lib_bin1 = 1;
+        break;
+    case real_layout::hc:
+        lib_nyq  = 1;
+        lib_bin1 = 2;
+        break;
     }
 
     double sum = 0, maxerr = 0;
     size_t count = 0;
-    auto acc = [&](double lib_val, double ref_val)
+    auto acc     = [&](double lib_val, double ref_val)
     {
         double d = lib_val - ref_val * scale;
         sum += d * d;
@@ -136,7 +148,7 @@ inline spectrum_error compare_spectrum(const real* lib, size_t N, real_layout la
     for (size_t k = 1; k <= nbins; ++k)
     {
         size_t li = lib_bin1 + 2 * (k - 1);
-        acc(static_cast<double>(lib[li]),     ref_ccs[2 * k]);
+        acc(static_cast<double>(lib[li]), ref_ccs[2 * k]);
         acc(static_cast<double>(lib[li + 1]), ref_ccs[2 * k + 1]);
     }
 
@@ -152,16 +164,25 @@ inline spectrum_error compare_spectrum(const real* lib, size_t N, real_layout la
 template <typename T>
 inline void convert_ccs_to_layout(const double* ccs, size_t N, real_layout layout, T* dst)
 {
-    const size_t half = N / 2;
-    const bool even   = (N % 2 == 0);
+    const size_t half  = N / 2;
+    const bool even    = (N % 2 == 0);
     const size_t nbins = even ? half - 1 : half;
 
     size_t dst_nyq, dst_bin1;
     switch (layout)
     {
-    case real_layout::ccs:     dst_nyq = 2 * half; dst_bin1 = 2; break;
-    case real_layout::fftpack: dst_nyq = N - 1;    dst_bin1 = 1; break;
-    case real_layout::hc:      dst_nyq = 1;        dst_bin1 = 2; break;
+    case real_layout::ccs:
+        dst_nyq  = 2 * half;
+        dst_bin1 = 2;
+        break;
+    case real_layout::fftpack:
+        dst_nyq  = N - 1;
+        dst_bin1 = 1;
+        break;
+    case real_layout::hc:
+        dst_nyq  = 1;
+        dst_bin1 = 2;
+        break;
     }
 
     // DC
@@ -172,7 +193,7 @@ inline void convert_ccs_to_layout(const double* ccs, size_t N, real_layout layou
     // Complex bins k=1..nbins
     for (size_t k = 1; k <= nbins; ++k)
     {
-        size_t di = dst_bin1 + 2 * (k - 1);
+        size_t di   = dst_bin1 + 2 * (k - 1);
         dst[di]     = static_cast<T>(ccs[2 * k]);
         dst[di + 1] = static_cast<T>(ccs[2 * k + 1]);
     }

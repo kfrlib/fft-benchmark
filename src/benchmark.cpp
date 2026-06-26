@@ -4,14 +4,10 @@
  * Benchmark source code is MIT-licensed
  * See LICENSE.txt for details
  */
-#include "benchmark.hpp"
-#include <atomic>
-#include <vector>
 
 #ifdef _WIN32
 #include <intrin.h>
 #include <windows.h>
-
 #endif
 #ifdef __linux__
 #include <pthread.h>
@@ -22,10 +18,14 @@
 #ifdef __APPLE__
 #include <pthread.h>
 #include <sys/mman.h>
-#include <sys/time.h>
 #include <sys/sysctl.h>
+#include <sys/time.h>
 #include <unistd.h>
 #endif
+
+#include "benchmark.hpp"
+#include <atomic>
+#include <vector>
 
 namespace bm
 {

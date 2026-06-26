@@ -8,7 +8,6 @@
 #include <string_view>
 #include <type_traits>
 
-
 // minimalist JSON writer
 
 enum class json_state
