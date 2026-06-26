@@ -127,13 +127,14 @@ BENCH_INLINE std::chrono::nanoseconds batch(fft_impl<real>* fft, real* out, cons
     std::chrono::nanoseconds result;
     if (inplace)
     {
-        bench_start();
-        for (unsigned i = 0; i < batch_size; ++i)
+        if (batch_size != 1)
         {
-            memcpy(out, in, sizeof(real) * real_size);
-            fft->execute(out, out);
-            dont_optimize(out);
+            return std::chrono::nanoseconds(0); // In-place batch > 1 not supported
         }
+        memcpy(out, in, sizeof(real) * real_size);
+        bench_start();
+        fft->execute(out, out);
+        dont_optimize(out);
         result = bench_stop();
     }
     else
@@ -342,10 +343,35 @@ struct fft_benchmark_runner
         return failed;
     }
 
+    static unsigned get_cache_level(size_t size, bool is_complex, bool inplace)
+    {
+        // Query the CPU/OS once; falls back to typical values when unavailable.
+        static const cpu_caches caches = get_cpu_caches();
+        if (is_complex)
+            size *= 2; // complex numbers are 2x larger
+        if (!inplace)
+            size *= 2; // out-of-place requires 2x memory
+        if (size * sizeof(real) <= caches.l1_size)
+            return 1;
+        if (size * sizeof(real) <= caches.l2_size)
+            return 2;
+        if (size * sizeof(real) <= caches.l3_size)
+            return 3;
+        return 4; // larger than L3 cache
+    }
+
     static void benchmark(std::vector<size_t> sizes, bool is_complex, bool inverse, bool inplace,
                           bool progress)
     {
         using namespace std::chrono_literals;
+
+        size_t size          = product(sizes);
+        unsigned cache_level = get_cache_level(size, is_complex, inplace);
+        if (inplace && cache_level < 2)
+        {
+            return; // In-place transforms are not supported for small sizes in this benchmark
+        }
+
         json_open_object();
         json_key("size");
         if (sizes.size() == 1)
@@ -384,7 +410,6 @@ struct fft_benchmark_runner
             return;
         }
 
-        size_t size            = product(sizes);
         size_t allocation_size = size * 4 + 2;
         real* in               = aligned_malloc<real>(allocation_size);
         real* out              = aligned_malloc<real>(allocation_size);
@@ -395,72 +420,105 @@ struct fft_benchmark_runner
         uint64_t total_calls = 0;
         std::vector<double> batch_times; // per-call time (seconds) for each batch
 
-        std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
-        std::chrono::nanoseconds warmup_duration(0);
-        unsigned warmup_calls = 0;
-        while (std::chrono::steady_clock::now() - start_time < std::chrono::duration<double>(0.05))
+        std::chrono::steady_clock::time_point estimate_start = std::chrono::steady_clock::now();
+        std::chrono::nanoseconds estimate_duration(0);
+        unsigned estimate_calls = 0;
+        do
         {
-            warmup_duration += batch(fft.get(), out, in, 1, inplace, real_in_size);
-            warmup_calls++;
-        }
-        std::chrono::duration<double> call_duration = warmup_duration / warmup_calls;
-        unsigned batch_size  = static_cast<unsigned>(std::max(1.0, ceil(100us / call_duration)));
-        unsigned num_batches = static_cast<unsigned>(std::max(ceil(50ms / call_duration) / batch_size, 10.0));
-        const unsigned extra_batches = num_batches;
+            prng::generate<true>(in, real_in_size);
+            estimate_duration += batch(fft.get(), out, in, 1, inplace, real_in_size);
+            estimate_calls++;
+        } while (std::chrono::steady_clock::now() - estimate_start < std::chrono::duration<double>(0.005));
+        std::chrono::duration<double> est_call_time = estimate_duration / estimate_calls;
+        unsigned batch_size =
+            cache_level >= 2 ? 1 : static_cast<unsigned>(std::max(1.0, ceil(50us / est_call_time)));
+        unsigned num_batches = static_cast<unsigned>(std::max(ceil(50ms / est_call_time) / batch_size, 10.0));
 
-        unsigned b = 0;
-        for (; b < num_batches + extra_batches; ++b)
+        Percentiles percentiles;
+        unsigned repeated = 0;
+        for (;;)
         {
-            auto stat = get_percentiles(batch_times);
-            if (b >= num_batches && stat.p50_median / stat.p1 < 1.02)
+            ++repeated;
+            const unsigned extra_batches = num_batches;
+
+            unsigned b = 0;
+            for (; b < num_batches + extra_batches; ++b)
             {
-                break;
+                if (b >= num_batches)
+                {
+                    auto stat = get_percentiles<true>(batch_times);
+                    // Stop once the batch times are tightly clustered.
+                    if (stat.p75 / stat.p25 < 1.02)
+                    {
+                        break;
+                    }
+                }
+
+                // Create a new FFT object each time to randomize any internal state
+                fft = fft_create<real>(sizes, is_complex, inverse, inplace);
+                prng::generate<true>(in, real_in_size);
+                // Prewarm the FFT object and buffers with a single execute
+                batch(fft.get(), out, in, 1, inplace, real_in_size);
+                std::chrono::nanoseconds batch_duration =
+                    batch(fft.get(), out, in, batch_size, inplace, real_in_size);
+
+                total_duration += batch_duration;
+                total_calls += batch_size;
+
+                double duration_s = std::chrono::duration<double>(batch_duration).count() / batch_size;
+                batch_times.insert(std::upper_bound(batch_times.begin(), batch_times.end(), duration_s),
+                                   duration_s);
             }
 
-            // Create a new FFT object each time to randomize any internal state
-            fft = fft_create<real>(sizes, is_complex, inverse, inplace);
-            prng::generate<true>(in, real_in_size);
-            // prewarm the FFT object and buffers
-            batch(fft.get(), out, in, (batch_size + 1) / 2, inplace, real_in_size);
-            std::chrono::nanoseconds batch_duration =
-                batch(fft.get(), out, in, batch_size, inplace, real_in_size);
+            // batch_times is kept sorted on insertion, so skip the redundant sort.
+            percentiles = get_percentiles<true>(batch_times);
+            if (percentiles.p75 / percentiles.p25 < 1.1)
+                break; // Stop once the batch times are tightly clustered.
+            if (repeated > 2)
+                break; // Stop after 2 repetitions, even if not tightly clustered.
 
-            total_duration += batch_duration;
-            total_calls += batch_size;
-            batch_times.push_back(std::chrono::duration<double>(batch_duration).count() / batch_size);
+            num_batches *= 2;
         }
-        printf("    prewarm_call_duration=%.3fus guessed batch_size=%u num_batches=%u batches executed: %u, "
-               "total calls: "
-               "%" PRIu64 ", total time: %.3fs\n",
-               call_duration.count() * 1e6, batch_size, num_batches, b, total_calls,
-               std::chrono::duration<double>(total_duration).count());
 
-        [[maybe_unused]] auto times                 = get_percentiles(batch_times);
-        [[maybe_unused]] double opspersecond_median = 1.0 / times.p50_median;
-        [[maybe_unused]] double opspersecond_best   = 1.0 / times.p1;
-
-        double time_value = times.p1;
+        // Choose the reporting statistic based on where the working set fits,
+        // giving a smoother transition from compute-bound to memory-bound:
+        //   L1-resident (cache_level 1): p1   (best case, compute-bound)
+        //   L2-resident (cache_level 2): p25  (slight memory pressure)
+        //   L3/RAM       (cache_level 3+): p50 (memory-bound, typical case)
+        double time_value = cache_level == 1   ? percentiles.p1
+                            : cache_level == 2 ? percentiles.p25
+                                               : percentiles.p50_median;
         // FFTW convention: complex FFT costs 5*N*log2(N) FLOP, real FFT half that.
         const double gflops =
-            ((is_complex ? 5.0 : 2.5) * size * std::log((double)size) / (std::log(2.0) * time_value)) /
-            1'000'000'000.0;
+            ((is_complex ? 5.0 : 2.5) * size * std::log2((double)size) / time_value) / 1'000'000'000.0;
 
         if (progress)
         {
-            char unit    = times.p1 < 1e-6 ? 'n' : 'u';
-            double scale = unit == 'n' ? 1e9 : 1e6;
-            printf("%-6s %-7s %-9s %-10s %11s %10.3f | %12.2f%cs%12.2f | %12.2f%cs%12.2f | %7" PRIu64 "\n",
+            char unit    = percentiles.p1 < 1e-6 ? 'n' : percentiles.p1 < 1e-3 ? 'u' : 'm';
+            double scale = unit == 'n' ? 1e9 : unit == 'u' ? 1e6 : 1e3;
+            printf("%-6s %-7s %-9s %-10s %11s %5u %10.3f   %10.2f%cs   %10.2f%cs   %10.2f%cs   %7u %8" PRIu64
+                   "   %8.4f   %3u\n",
                    type_name<real>, is_complex_str(is_complex), inverse_str(inverse), inplace_str(inplace),
-                   sizes_to_string(sizes).c_str(), gflops, times.p1 * scale, unit, opspersecond_best,
-                   times.p50_median * scale, unit, opspersecond_median, total_calls);
+                   sizes_to_string(sizes).c_str(), cache_level, gflops, percentiles.p1 * scale, unit,
+                   percentiles.p25 * scale, unit, percentiles.p50_median * scale, unit, batch_size,
+                   total_calls, percentiles.p75 / percentiles.p25, repeated);
         }
 
         json_key("gflops");
         json_number(gflops);
+        // Which percentile gflops is derived from: "p1" (compute-bound, fits L1),
+        // "p25" (L2-resident) or "p50" (memory-bound). Both raw times are always
+        // reported below.
+        json_key("gflops_metric");
+        json_string(cache_level == 1 ? "p1" : cache_level == 2 ? "p25" : "p50");
         json_key("best_time");
-        json_number(times.p1 * 1'000'000);
+        json_number(percentiles.p1 * 1'000'000);
+        json_key("p25_time");
+        json_number(percentiles.p25 * 1'000'000);
         json_key("median_time");
-        json_number(times.p50_median * 1'000'000);
+        json_number(percentiles.p50_median * 1'000'000);
+        json_key("cache_level");
+        json_number(cache_level);
         json_close_object();
 
         if (progress)
@@ -473,10 +531,10 @@ struct fft_benchmark_runner
 };
 
 static std::string outname;
-static bool progress   = true;
-static bool banner     = true;
-static bool accuracy   = false;
-static bool prewarm    = false;
+static bool progress = true;
+static bool banner   = true;
+static bool accuracy = false;
+static bool prewarm  = false;
 static std::vector<std::vector<size_t>> sizes;
 static std::vector<bool> is_double_list{ false, true };
 static std::vector<bool> is_complex_list{ true };
@@ -644,6 +702,8 @@ int main(int argc, char** argv)
     std::string cpuname = cpu_name();
     std::string fftname = fft_name();
 
+    const auto caches = get_cpu_caches();
+
     if (banner)
     {
         printf("FFT/DFT benchmarking tool. Copyright (C) 2016-2026 Dan Casarin https://www.kfrlib.com\n");
@@ -663,8 +723,10 @@ int main(int argc, char** argv)
                    execfile(argv[0]).c_str());
         }
         printf("CPU: %s\n", cpuname.c_str());
+        printf("CPU caches: %s\n", cpu_caches_string(caches).c_str());
         printf("Algorithm: %s\n", fftname.c_str());
         printf("Compiler: %s %s\n", CMAKE_CXX_COMPILER_ID, CMAKE_CXX_COMPILER_VERSION);
+        printf("Benchmark git commit: %s\n", GIT_COMMIT_HASH);
     }
 
     if (progress)
@@ -687,11 +749,26 @@ int main(int argc, char** argv)
     json_key("cpu");
     json_string(cpuname);
 
+    json_key("cpu_caches");
+    json_open_object();
+    json_key("l1");
+    json_number(caches.l1_size);
+    json_key("l2");
+    json_number(caches.l2_size);
+    json_key("l3");
+    json_number(caches.l3_size);
+    json_key("line_size");
+    json_number(caches.line_size);
+    json_close_object();
+
     json_key("clock_MHz");
     json_number(1000.0 / tsc_resolution());
 
     json_key("library");
     json_string(fftname);
+
+    json_key("git_commit");
+    json_string(GIT_COMMIT_HASH);
 
     unsigned accuracy_failed = 0;
     if (accuracy)
@@ -715,9 +792,9 @@ int main(int argc, char** argv)
 
         if (progress)
         {
-            printf("%-6s %-7s %-9s %-10s %11s %10s | %14s%12s | %14s%12s | %7s\n", "data", "type",
-                   "direction", "buffer", "size", "gflops", "best time", "(ops/sec)", "med. time",
-                   "(ops/sec)", "calls");
+            printf("%-6s %-7s %-9s %-10s %11s %5s %10s   %12s   %12s   %12s   %7s %8s   %8s   %3s\n", "data",
+                   "type", "direction", "buffer", "size", "cache", "gflops", "P1", "P25", "P50", "batch",
+                   "calls", "P75/P25", "R");
         }
 
         benchmark_scope scope;

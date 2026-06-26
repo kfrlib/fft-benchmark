@@ -22,6 +22,8 @@
 #ifdef __APPLE__
 #include <pthread.h>
 #include <sys/mman.h>
+#include <sys/time.h>
+#include <sys/sysctl.h>
 #include <unistd.h>
 #endif
 
@@ -332,6 +334,149 @@ benchmark_scope::~benchmark_scope()
 #ifdef __APPLE__
     pthread_set_qos_class_self_np(old_qos_class, old_qos_relative_priority);
 #endif
+}
+
+std::string cpu_name_from_os()
+{
+#if defined(_WIN32)
+    // On Windows the registry is the authoritative source for the model name
+    // (matches what is shown in System settings / Task Manager). CPUID brand
+    // strings are absent or generic on some virtualized / emulated setups.
+    HKEY hKey = nullptr;
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0", 0, KEY_READ,
+                      &hKey) == ERROR_SUCCESS)
+    {
+        wchar_t wide[256] = {};
+        DWORD size        = sizeof(wide);
+        DWORD type        = 0;
+        if (RegQueryValueExW(hKey, L"ProcessorNameString", nullptr, &type, reinterpret_cast<LPBYTE>(wide),
+                             &size) == ERROR_SUCCESS &&
+            type == REG_SZ)
+        {
+            RegCloseKey(hKey);
+            int len = static_cast<int>(wcslen(wide));
+            // Worst case: 4 UTF-8 bytes per wchar + NUL.
+            std::string out(len * 4 + 1, '\0');
+            int n = WideCharToMultiByte(CP_UTF8, 0, wide, len, out.data(), static_cast<int>(out.size()),
+                                        nullptr, nullptr);
+            if (n > 0)
+            {
+                out.resize(n);
+                return trim(out);
+            }
+        }
+        RegCloseKey(hKey);
+    }
+#elif defined(__APPLE__)
+    char buf[256] = {};
+    size_t len    = sizeof(buf);
+    if (sysctlbyname("machdep.cpu.brand_string", buf, &len, nullptr, 0) == 0 && len > 0)
+    {
+        std::string s(buf, strnlen(buf, sizeof(buf)));
+        return trim(s);
+    }
+#elif defined(__linux__)
+    // /proc/cpuinfo "model name" line on x86; "Hardware"/"model name" on ARM.
+    FILE* fp = fopen("/proc/cpuinfo", "r");
+    if (fp)
+    {
+        char line[512];
+        while (fgets(line, sizeof(line), fp))
+        {
+            const char* prefixes[] = { "model name", "Hardware", "Processor" };
+            for (const char* p : prefixes)
+            {
+                size_t plen = strlen(p);
+                if (strncmp(line, p, plen) == 0 && line[plen] == ':')
+                {
+                    const char* val = line + plen + 1;
+                    while (*val == ' ' || *val == '\t')
+                        ++val;
+                    std::string s(val);
+                    while (!s.empty() && (s.back() == '\n' || s.back() == '\r'))
+                        s.pop_back();
+                    fclose(fp);
+                    return trim(s);
+                }
+            }
+        }
+        fclose(fp);
+    }
+#endif
+    return "(unknown)";
+}
+
+cpu_caches get_cpu_caches()
+{
+    // Typical values used as a fallback for any field the OS/CPU cannot report.
+    // These are reasonable for a modern x86-64 / AArch64 desktop core.
+    cpu_caches caches{
+        /* line_size */ 64,
+        /* l1_size   */ 32 * 1024,
+        /* l2_size   */ 512 * 1024,
+        /* l3_size   */ 8 * 1024 * 1024,
+    };
+
+#if defined(_WIN32)
+    DWORD len = 0;
+    GetLogicalProcessorInformationEx(RelationCache, nullptr, &len);
+    if (len)
+    {
+        std::vector<char> buf(len);
+        if (GetLogicalProcessorInformationEx(
+                RelationCache, reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(buf.data()), &len))
+        {
+            char* ptr = buf.data();
+            char* end = buf.data() + len;
+            while (ptr < end)
+            {
+                auto* info = reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(ptr);
+                if (info->Relationship == RelationCache)
+                {
+                    const CACHE_RELATIONSHIP& c = info->Cache;
+                    // Pick the first cache reported at each level (per-core view).
+                    if (c.LineSize)
+                        caches.line_size = c.LineSize;
+                    if (c.Level == 1 && (c.Type == CacheData || c.Type == CacheUnified))
+                        caches.l1_size = c.CacheSize;
+                    else if (c.Level == 2)
+                        caches.l2_size = c.CacheSize;
+                    else if (c.Level == 3)
+                        caches.l3_size = c.CacheSize;
+                }
+                ptr += info->Size;
+            }
+        }
+    }
+#elif defined(__APPLE__)
+    auto read_sysctl = [](const char* name, size_t& out)
+    {
+        uint64_t value = 0;
+        size_t size    = sizeof(value);
+        if (sysctlbyname(name, &value, &size, nullptr, 0) == 0 && value != 0)
+            out = static_cast<size_t>(value);
+    };
+    read_sysctl("hw.cachelinesize", caches.line_size);
+    read_sysctl("hw.l1dcachesize", caches.l1_size);
+    read_sysctl("hw.l2cachesize", caches.l2_size);
+    read_sysctl("hw.l3cachesize", caches.l3_size); // absent on Apple Silicon -> keeps fallback
+#elif defined(__linux__)
+    auto read_sysconf = [](int line_name, int size_name, size_t& line_out, size_t& size_out)
+    {
+        long ls = sysconf(line_name);
+        if (ls > 0)
+            line_out = static_cast<size_t>(ls);
+        long sz = sysconf(size_name);
+        if (sz > 0)
+            size_out = static_cast<size_t>(sz);
+    };
+    size_t dummy_line = caches.line_size;
+    read_sysconf(_SC_LEVEL1_DCACHE_LINESIZE, _SC_LEVEL1_DCACHE_SIZE, caches.line_size, caches.l1_size);
+    read_sysconf(_SC_LEVEL2_CACHE_LINESIZE, _SC_LEVEL2_CACHE_SIZE, dummy_line, caches.l2_size);
+    read_sysconf(_SC_LEVEL3_CACHE_LINESIZE, _SC_LEVEL3_CACHE_SIZE, dummy_line, caches.l3_size);
+#endif
+
+    return caches;
 }
 
 } // namespace bm

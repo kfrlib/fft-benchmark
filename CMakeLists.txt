@@ -60,6 +60,25 @@ endif ()
 add_compile_definitions(CMAKE_CXX_COMPILER_ID="${CMAKE_CXX_COMPILER_ID}")
 add_compile_definitions(CMAKE_CXX_COMPILER_VERSION="${CMAKE_CXX_COMPILER_VERSION}")
 
+# Capture the git commit hash (with -dirty suffix if the working tree is dirty)
+execute_process(
+    COMMAND git -C ${CMAKE_SOURCE_DIR} rev-parse --short HEAD
+    OUTPUT_VARIABLE GIT_COMMIT_HASH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET)
+execute_process(
+    COMMAND git -C ${CMAKE_SOURCE_DIR} status --porcelain
+    OUTPUT_VARIABLE GIT_WORKING_TREE_STATUS
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET)
+if (GIT_WORKING_TREE_STATUS)
+    set(GIT_COMMIT_HASH "${GIT_COMMIT_HASH}-dirty")
+endif ()
+if (NOT GIT_COMMIT_HASH)
+    set(GIT_COMMIT_HASH "unknown")
+endif ()
+message(STATUS "Git commit: ${GIT_COMMIT_HASH}")
+
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 set(COMMON_INCLUDES ${CMAKE_CURRENT_LIST_DIR}/src)
@@ -121,6 +140,8 @@ macro (add_benchmark_target TARGET_NAME ARCH)
         endif ()
     endif ()
     add_dependencies(${TARGET_NAME} ${TARGET_NAME}-${ARCH})
+    
+    target_compile_definitions(${TARGET_NAME}-${ARCH} PRIVATE GIT_COMMIT_HASH="${GIT_COMMIT_HASH}")
 endmacro ()
 
 function (add_benchmark NAME)

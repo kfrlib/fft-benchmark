@@ -394,6 +394,7 @@ int main(int argc, char** argv)
         printf("CPU: %s\n", cpuname.c_str());
         printf("Algorithm: %s\n", srcname.c_str());
         printf("Compiler: %s %s\n", CMAKE_CXX_COMPILER_ID, CMAKE_CXX_COMPILER_VERSION);
+        printf("Benchmark git commit: %s\n", GIT_COMMIT_HASH);
     }
 
     if (progress)
@@ -421,6 +422,9 @@ int main(int argc, char** argv)
 
     json_key("library");
     json_string(srcname);
+
+    json_key("git_commit");
+    json_string(GIT_COMMIT_HASH);
 
     constexpr std::pair<unsigned, unsigned> test_cases[] = {
         { 48000, 44100 }, { 96000, 48000 }, { 96000, 44100 }, { 48000, 16000 }, { 40009, 19997 },

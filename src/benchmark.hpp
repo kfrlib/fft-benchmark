@@ -129,6 +129,10 @@ constexpr inline const char* type_name = "float";
 template <>
 constexpr inline const char* type_name<double> = "double";
 
+// OS-specific fallback used when CPUID (or its brand-string leaf) is not
+// available. Implemented in benchmark.cpp.
+std::string cpu_name_from_os();
+
 inline std::string cpu_name()
 {
 #if defined(__x86_64__) || defined(_M_X64)
@@ -146,7 +150,7 @@ inline std::string cpu_name()
 #endif
 
     if (data[0] < 0x80000004)
-        return "(unknown)";
+        return cpu_name_from_os();
 
 #if defined __GNUC__ || defined __clang__
     __cpuid(0x80000002, data[0], data[1], data[2], data[3]);
@@ -160,9 +164,12 @@ inline std::string cpu_name()
 
     std::memcpy(result, data, sizeof(data));
     result[std::size(result) - 1] = 0;
-    return trim(std::string(std::data(result), std::size(result)));
+    std::string name              = trim(std::string(std::data(result), std::size(result)));
+    // Some virtualized environments return an empty/whitespace brand string
+    // even though the leaf is present; fall back to the OS in that case.
+    return name.empty() ? cpu_name_from_os() : name;
 #else
-    return "(unknown)";
+    return cpu_name_from_os();
 #endif
 }
 
@@ -295,10 +302,7 @@ BENCH_INLINE static double tsc_resolution()
 }
 
 #if defined(USE_OS_TIME)
-BENCH_INLINE static void bench_start()
-{
-    details::start_time = os_time();
-}
+BENCH_INLINE static void bench_start() { details::start_time = os_time(); }
 BENCH_INLINE static std::chrono::nanoseconds bench_stop()
 {
     std::chrono::nanoseconds stop_time = os_time();
@@ -332,7 +336,9 @@ static T get_minimum(const std::vector<T>& measures)
 struct Percentiles
 {
     double p1;
+    double p25;
     double p50_median;
+    double p75;
 };
 
 inline double sample_at(double pos, const std::vector<double>& measures)
@@ -349,14 +355,17 @@ inline double sample_at(double pos, const std::vector<double>& measures)
     return measures[idx_below] * weight_below + measures[idx_above] * weight_above;
 }
 
-template <typename Alloc>
+template <bool sorted = false, typename Alloc>
 static Percentiles get_percentiles(std::vector<double, Alloc>& measures)
 {
-    std::sort(measures.begin(), measures.end());
+    if constexpr (!sorted)
+        std::sort(measures.begin(), measures.end());
     Percentiles result;
 
     result.p50_median = sample_at(0.5, measures);
     result.p1         = sample_at(0.01, measures);
+    result.p25        = sample_at(0.25, measures);
+    result.p75        = sample_at(0.75, measures);
     return result;
 }
 
@@ -799,5 +808,25 @@ void generate(T* data, size_t size)
 }
 
 } // namespace prng
+
+struct cpu_caches
+{
+    size_t line_size;
+    size_t l1_size;
+    size_t l2_size;
+    size_t l3_size;
+};
+
+// Queries the CPU/OS for cache parameters. Uses platform APIs where available
+// and falls back to typical values for any field that cannot be determined.
+cpu_caches get_cpu_caches();
+
+inline std::string cpu_caches_string(const cpu_caches& caches)
+{
+    return "L1: " + std::to_string(caches.l1_size / 1024) +
+           "KB, L2: " + std::to_string(caches.l2_size / 1024) +
+           "KB, L3: " + std::to_string(caches.l3_size / 1024) +
+           "KB, Line: " + std::to_string(caches.line_size) + "B";
+}
 
 } // namespace bm
