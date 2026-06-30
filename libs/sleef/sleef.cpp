@@ -21,7 +21,7 @@ class fft_implementation : public fft_impl_stub
 public:
 };
 
-constexpr static uint32_t dft_flags = SLEEF_MODE_ESTIMATE | SLEEF_MODE_NO_MT;
+constexpr static uint32_t dft_flags = SLEEF_MODE_MEASURE | SLEEF_MODE_NO_MT;
 
 // complex, 1D
 template <typename real, bool invert, bool inplace>
@@ -36,11 +36,11 @@ public:
     constexpr static InitFn fn_init    = pick(&SleefDFT_float_init1d, &SleefDFT_double_init1d);
     constexpr static ExecFn fn_execute = pick(&SleefDFT_float_execute, &SleefDFT_double_execute);
 
-    fft_implementation(sizes_t<1> sizes)
+    fft_implementation(sizes_t<1> sizes, real* out, const real* in)
     {
         uint64_t mode = dft_flags;
         mode |= invert ? SLEEF_MODE_BACKWARD : SLEEF_MODE_FORWARD;
-        plan = fn_init(static_cast<uint32_t>(sizes[0]), nullptr, nullptr, mode);
+        plan = fn_init(static_cast<uint32_t>(sizes[0]), in, out, mode);
         if (!plan)
         {
             fprintf(stderr, "Sleef DFT: failed to initialize plan for size %zu\n", sizes[0]);
@@ -73,10 +73,10 @@ public:
     constexpr static InitFn fn_init    = pick(&SleefDFT_float_init1d, &SleefDFT_double_init1d);
     constexpr static ExecFn fn_execute = pick(&SleefDFT_float_execute, &SleefDFT_double_execute);
 
-    fft_implementation(sizes_t<1> sizes)
+    fft_implementation(sizes_t<1> sizes, real* out, const real* in)
     {
         uint64_t mode = SLEEF_MODE_REAL | SLEEF_MODE_FORWARD | dft_flags;
-        plan          = fn_init(static_cast<uint32_t>(sizes[0]), nullptr, nullptr, mode);
+        plan          = fn_init(static_cast<uint32_t>(sizes[0]), in, out, mode);
     }
 
     void execute(real* out, const real* in) { fn_execute(plan, in, out); }
@@ -104,10 +104,10 @@ public:
     constexpr static InitFn fn_init    = pick(&SleefDFT_float_init1d, &SleefDFT_double_init1d);
     constexpr static ExecFn fn_execute = pick(&SleefDFT_float_execute, &SleefDFT_double_execute);
 
-    fft_implementation(sizes_t<1> sizes)
+    fft_implementation(sizes_t<1> sizes, real* out, const real* in)
     {
         uint64_t mode = SLEEF_MODE_REAL | SLEEF_MODE_BACKWARD | dft_flags;
-        plan          = fn_init(static_cast<uint32_t>(sizes[0]), nullptr, nullptr, mode);
+        plan          = fn_init(static_cast<uint32_t>(sizes[0]), in, out, mode);
     }
 
     void execute(real* out, const real* in) { fn_execute(plan, in, out); }
@@ -123,14 +123,17 @@ private:
 };
 
 template <typename real>
-fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, bool is_complex, bool invert, bool inplace)
+fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, real* out, const real* in, bool is_complex,
+                              bool invert, bool inplace)
 {
     if (size.size() != 1)
         return nullptr; // Sleef DFT only supports 1D transforms
     if ((size[0] & (size[0] - 1)) != 0)
         return nullptr; // Sleef DFT requires power-of-2 sizes
-    return fft_create_for<fft_implementation, real>(size, is_complex, invert, inplace);
+    return fft_create_for<fft_implementation, real>(size, out, in, is_complex, invert, inplace);
 }
 
-template std::unique_ptr<fft_impl<float>> fft_create<float>(const std::vector<size_t>&, bool, bool, bool);
-template std::unique_ptr<fft_impl<double>> fft_create<double>(const std::vector<size_t>&, bool, bool, bool);
+template std::unique_ptr<fft_impl<float>> fft_create<float>(const std::vector<size_t>&, float*,
+                                                            const float* in, bool, bool, bool);
+template std::unique_ptr<fft_impl<double>> fft_create<double>(const std::vector<size_t>&, double* out,
+                                                              const double* in, bool, bool, bool);

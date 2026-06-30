@@ -54,7 +54,7 @@ public:
         }
     }
 
-    fft_implementation(sizes_t<dims> size)
+    fft_implementation(sizes_t<dims> size, real*, const real*)
     {
         HANDLE_MKL_STATUS(create(handle_o, size));
         HANDLE_MKL_STATUS(DftiSetValue(handle_o, DFTI_PLACEMENT, DFTI_NOT_INPLACE));
@@ -106,10 +106,13 @@ private:
 };
 
 template <typename real>
-fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, bool is_complex, bool invert, bool inplace)
+fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, real* out, const real* in, bool is_complex,
+                              bool invert, bool inplace)
 {
-    return fft_create_for<fft_implementation, real>(size, is_complex, invert, inplace);
+    return fft_create_for<fft_implementation, real>(size, out, in, is_complex, invert, inplace);
 }
 
-template std::unique_ptr<fft_impl<float>> fft_create<float>(const std::vector<size_t>&, bool, bool, bool);
-template std::unique_ptr<fft_impl<double>> fft_create<double>(const std::vector<size_t>&, bool, bool, bool);
+template std::unique_ptr<fft_impl<float>> fft_create<float>(const std::vector<size_t>&, float*,
+                                                            const float*, bool, bool, bool);
+template std::unique_ptr<fft_impl<double>> fft_create<double>(const std::vector<size_t>&, double*,
+                                                              const double*, bool, bool, bool);

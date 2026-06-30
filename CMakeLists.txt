@@ -7,8 +7,20 @@ set(CMAKE_CXX_EXTENSIONS ON)
 
 # add_compile_definitions(USE_OS_TIME=1)
 
+# Disable ASLR / image address randomization for more stable benchmarks.
+# On Windows /DYNAMICBASE:NO turns off ASLR for the executable.
+# On Linux we build a non-PIE executable, which fixes the main image's
+# load address (kernel randomization of the main binary is tied to PIE).
 if (WIN32)
     add_link_options(/DYNAMICBASE:NO)
+elseif (APPLE)
+    # Apple deprecated -no_pie on newer toolchains/arm64,
+else ()
+    # Linux (and other ELF platforms) with GCC/Clang: produce a non-PIE binary.
+    if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        add_compile_options(-fno-pie)
+        add_link_options(-no-pie)
+    endif ()
 endif ()
 
 if (APPLE)

@@ -25,7 +25,7 @@ template <bool inplace>
 class fft_implementation<1, double, true, false, inplace> : public fft_impl<double>
 {
 public:
-    explicit fft_implementation(sizes_t<1> sizes) : N(sizes[0])
+    explicit fft_implementation(sizes_t<1> sizes, double*, const double*) : N(sizes[0])
     {
         plan = OTFFT::Factory::createComplexFFT(static_cast<int>(N));
     }
@@ -47,7 +47,7 @@ template <bool inplace>
 class fft_implementation<1, double, true, true, inplace> : public fft_impl<double>
 {
 public:
-    explicit fft_implementation(sizes_t<1> sizes) : N(sizes[0])
+    explicit fft_implementation(sizes_t<1> sizes, double*, const double*) : N(sizes[0])
     {
         plan = OTFFT::Factory::createComplexFFT(static_cast<int>(N));
     }
@@ -71,7 +71,7 @@ template <bool inplace>
 class fft_implementation<1, double, false, false, inplace> : public fft_impl<double>
 {
 public:
-    explicit fft_implementation(sizes_t<1> sizes) : N(sizes[0])
+    explicit fft_implementation(sizes_t<1> sizes, double*, const double*) : N(sizes[0])
     {
         plan = OTFFT::Factory::createRealFFT(static_cast<int>(N));
     }
@@ -94,7 +94,7 @@ template <bool inplace>
 class fft_implementation<1, double, false, true, inplace> : public fft_impl<double>
 {
 public:
-    explicit fft_implementation(sizes_t<1> sizes) : N(sizes[0])
+    explicit fft_implementation(sizes_t<1> sizes, double*, const double*) : N(sizes[0])
     {
         plan = OTFFT::Factory::createRealFFT(static_cast<int>(N));
     }
@@ -115,7 +115,8 @@ private:
 // ---- fft_create entry point -------------------------------------------------
 
 template <typename real>
-fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, bool is_complex, bool invert, bool inplace)
+fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, real* out, const real* in, bool is_complex,
+                              bool invert, bool inplace)
 {
     // OTFFT only supports double precision
     if constexpr (sizeof(real) != sizeof(double))
@@ -132,8 +133,10 @@ fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, bool is_complex, 
     if (!is_complex && (N % 2) != 0)
         return nullptr;
 
-    return fft_create_for<fft_implementation, real>(size, is_complex, invert, inplace);
+    return fft_create_for<fft_implementation, real>(size, out, in, is_complex, invert, inplace);
 }
 
-template std::unique_ptr<fft_impl<float>> fft_create<float>(const std::vector<size_t>&, bool, bool, bool);
-template std::unique_ptr<fft_impl<double>> fft_create<double>(const std::vector<size_t>&, bool, bool, bool);
+template std::unique_ptr<fft_impl<float>> fft_create<float>(const std::vector<size_t>&, float*,
+                                                            const float*, bool, bool, bool);
+template std::unique_ptr<fft_impl<double>> fft_create<double>(const std::vector<size_t>&, double*,
+                                                              const double*, bool, bool, bool);

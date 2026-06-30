@@ -83,6 +83,22 @@ BENCH_INLINE void aligned_free(T* aligned_ptr, size_t size)
 }
 
 template <typename T>
+struct aligned_deleter
+{
+    size_t size;
+    void operator()(T* ptr) const { aligned_free(ptr, size); }
+};
+
+template <typename T>
+using aligned_ptr = std::unique_ptr<T[], aligned_deleter<T>>;
+
+template <typename T>
+BENCH_INLINE aligned_ptr<T> aligned_malloc_raii(size_t size)
+{
+    return aligned_ptr<T>(aligned_malloc<T>(size), aligned_deleter<T>{ size });
+}
+
+template <typename T>
 struct aligned_allocator
 {
     using value_type = T;

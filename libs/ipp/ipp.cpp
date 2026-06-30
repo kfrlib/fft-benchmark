@@ -15,6 +15,8 @@
 #endif
 #include <string>
 
+constexpr IppHintAlgorithm hint = ippAlgHintFast;
+
 std::string fft_name()
 {
     ippInit();
@@ -43,15 +45,15 @@ public:
     constexpr static auto ippsDFTGetSize_C_T = pick(ippsDFTGetSize_C_32fc, ippsDFTGetSize_C_64fc);
     constexpr static auto ippsDFTInit_C_T    = pick(ippsDFTInit_C_32fc, ippsDFTInit_C_64fc);
 
-    fft_implementation(sizes_t<1> size)
+    fft_implementation(sizes_t<1> size, real*, const real*)
     {
         int specsize = 0;
         int initsize = 0;
         int bufsize  = 0;
-        ippsDFTGetSize_C_T(size[0], IPP_FFT_NODIV_BY_ANY, ippAlgHintAccurate, &specsize, &initsize, &bufsize);
+        ippsDFTGetSize_C_T(size[0], IPP_FFT_NODIV_BY_ANY, hint, &specsize, &initsize, &bufsize);
         initmem = initsize ? ippsMalloc_8u(initsize) : NULL;
         plan    = (IppsDFTSpec_C_T*)ippsMalloc_8u(specsize);
-        ippsDFTInit_C_T(size[0], IPP_FFT_NODIV_BY_ANY, ippAlgHintAccurate, plan, initmem);
+        ippsDFTInit_C_T(size[0], IPP_FFT_NODIV_BY_ANY, hint, plan, initmem);
         temp = bufsize ? ippsMalloc_8u(bufsize) : NULL;
     }
 
@@ -99,15 +101,15 @@ public:
     constexpr static auto ippsDFTGetSize_R_T  = pick(ippsDFTGetSize_R_32f, ippsDFTGetSize_R_64f);
     constexpr static auto ippsDFTInit_R_T     = pick(ippsDFTInit_R_32f, ippsDFTInit_R_64f);
 
-    fft_implementation(sizes_t<1> size)
+    fft_implementation(sizes_t<1> size, real*, const real*)
     {
         int specsize = 0;
         int initsize = 0;
         int bufsize  = 0;
-        ippsDFTGetSize_R_T(size[0], IPP_FFT_NODIV_BY_ANY, ippAlgHintAccurate, &specsize, &initsize, &bufsize);
+        ippsDFTGetSize_R_T(size[0], IPP_FFT_NODIV_BY_ANY, hint, &specsize, &initsize, &bufsize);
         initmem = initsize ? ippsMalloc_8u(initsize) : NULL;
         plan    = (IppsDFTSpec_R_T*)ippsMalloc_8u(specsize);
-        ippsDFTInit_R_T(size[0], IPP_FFT_NODIV_BY_ANY, ippAlgHintAccurate, plan, initmem);
+        ippsDFTInit_R_T(size[0], IPP_FFT_NODIV_BY_ANY, hint, plan, initmem);
         temp = bufsize ? ippsMalloc_8u(bufsize) : NULL;
     }
 
@@ -138,13 +140,16 @@ private:
 };
 
 template <typename real>
-fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, bool is_complex, bool invert, bool inplace)
+fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, real* out, const real* in, bool is_complex,
+                              bool invert, bool inplace)
 {
-    return fft_create_for<fft_implementation, real>(size, is_complex, invert, inplace);
+    return fft_create_for<fft_implementation, real>(size, out, in, is_complex, invert, inplace);
 }
 
-template std::unique_ptr<fft_impl<float>> fft_create<float>(const std::vector<size_t>&, bool, bool, bool);
-template std::unique_ptr<fft_impl<double>> fft_create<double>(const std::vector<size_t>&, bool, bool, bool);
+template std::unique_ptr<fft_impl<float>> fft_create<float>(const std::vector<size_t>&, float*,
+                                                            const float*, bool, bool, bool);
+template std::unique_ptr<fft_impl<double>> fft_create<double>(const std::vector<size_t>&, double*,
+                                                              const double*, bool, bool, bool);
 
 std::string src_name()
 {
@@ -171,10 +176,9 @@ struct src_implementation<float> : public src_impl<float>
         const Ipp32f alpha   = 14.47f; // Kaiser window parameter (~140 dB sidelobe attenuation)
 
         ippsResamplePolyphaseFixedGetSize_32f(in_rate, out_rate, filterSize, &specSize, &filterLen,
-                                              &filterHeight, ippAlgHintAccurate);
+                                              &filterHeight, hint);
         spec = (IppsResamplingPolyphaseFixed_32f*)ippsMalloc_8u(specSize);
-        ippsResamplePolyphaseFixedInit_32f(in_rate, out_rate, filterSize, rollf, alpha, spec,
-                                           ippAlgHintAccurate);
+        ippsResamplePolyphaseFixedInit_32f(in_rate, out_rate, filterSize, rollf, alpha, spec, hint);
         // ippsResamplePolyphaseFixed_32f reads filterLen/2 samples before the time
         // position, so we must prepend history zeros to avoid out-of-bounds reads.
         history   = filterLen / 2;

@@ -31,7 +31,7 @@ public:
     using InterleavedSetup = pick_t<vDSP_DFT_Interleaved_Setup, vDSP_DFT_Interleaved_SetupD>;
     using ZopSetup         = pick_t<vDSP_DFT_Setup, vDSP_DFT_SetupD>;
 
-    fft_implementation(sizes_t<1> sizes) : N(sizes[0])
+    fft_implementation(sizes_t<1> sizes, real*, const real*) : N(sizes[0])
     {
         constexpr vDSP_DFT_Direction dir = invert ? vDSP_DFT_INVERSE : vDSP_DFT_FORWARD;
 
@@ -156,7 +156,7 @@ public:
     PICK;
     using ZropSetup = pick_t<vDSP_DFT_Setup, vDSP_DFT_SetupD>;
 
-    fft_implementation(sizes_t<1> sizes) : N(sizes[0])
+    fft_implementation(sizes_t<1> sizes, real*, const real*) : N(sizes[0])
     {
         if constexpr (sizeof(real) == 4)
             setup = vDSP_DFT_zrop_CreateSetup(nullptr, static_cast<vDSP_Length>(N), vDSP_DFT_FORWARD);
@@ -242,7 +242,7 @@ public:
     PICK;
     using ZropSetup = pick_t<vDSP_DFT_Setup, vDSP_DFT_SetupD>;
 
-    fft_implementation(sizes_t<1> sizes) : N(sizes[0])
+    fft_implementation(sizes_t<1> sizes, real*, const real*) : N(sizes[0])
     {
         if constexpr (sizeof(real) == 4)
             setup = vDSP_DFT_zrop_CreateSetup(nullptr, static_cast<vDSP_Length>(N), vDSP_DFT_INVERSE);
@@ -326,7 +326,8 @@ static fft_impl_ptr<real> make_if_valid(Impl* impl)
 }
 
 template <typename real>
-fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, bool is_complex, bool invert, bool inplace)
+fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, real* out, const real* in, bool is_complex,
+                              bool invert, bool inplace)
 {
     if (size.size() != 1)
         return nullptr;
@@ -338,9 +339,9 @@ fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, bool is_complex, 
         using F = fft_implementation<1, real, true, false, false>;
         using I = fft_implementation<1, real, true, true, false>;
         if (invert)
-            return make_if_valid<I, real>(new I({ N }));
+            return make_if_valid<I, real>(new I({ N }, out, in));
         else
-            return make_if_valid<F, real>(new F({ N }));
+            return make_if_valid<F, real>(new F({ N }, out, in));
     }
     else
     {
@@ -352,16 +353,18 @@ fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, bool is_complex, 
         {
             // R2C forward
             using F = fft_implementation<1, real, false, false, false>;
-            return make_if_valid<F, real>(new F({ N }));
+            return make_if_valid<F, real>(new F({ N }, out, in));
         }
         else
         {
             // C2R inverse
             using I = fft_implementation<1, real, false, true, false>;
-            return make_if_valid<I, real>(new I({ N }));
+            return make_if_valid<I, real>(new I({ N }, out, in));
         }
     }
 }
 
-template fft_impl_ptr<float> fft_create<float>(const std::vector<size_t>&, bool, bool, bool);
-template fft_impl_ptr<double> fft_create<double>(const std::vector<size_t>&, bool, bool, bool);
+template fft_impl_ptr<float> fft_create<float>(const std::vector<size_t>&, float*, const float*, bool, bool,
+                                               bool);
+template fft_impl_ptr<double> fft_create<double>(const std::vector<size_t>&, double*, const double*, bool,
+                                                 bool, bool);

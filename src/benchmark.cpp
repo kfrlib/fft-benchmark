@@ -268,6 +268,46 @@ static int ideal_core = 2;
 void run_on_core(int core) { ideal_core = core; }
 int get_ideal_core() { return ideal_core; }
 
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
+static unsigned int old_mxcsr              = 0;
+static constexpr unsigned int FTZ_DAZ_BITS = 0x8040; // FTZ (bit 15) | DAZ (bit 6)
+#elif defined(__aarch64__) || defined(__ARM_NEON)
+static uint64_t old_fpcr = 0;
+// AH (bit 1) flushes denormal inputs to zero; FZ (bit 24) flushes denormal
+// outputs to zero. Both are AArch64 NEON/VFP control bits.
+static constexpr uint64_t FZ_BITS = (1u << 24) | (1u << 1);
+#endif
+
+void enable_denormals_flush()
+{
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
+    old_mxcsr = _mm_getcsr();
+    _mm_setcsr((old_mxcsr & ~FTZ_DAZ_BITS) | FTZ_DAZ_BITS);
+#elif defined(__aarch64__)
+    uint64_t fpcr;
+    asm volatile("mrs %0, FPCR" : "=r"(fpcr));
+    old_fpcr = fpcr;
+    asm volatile("msr FPCR, %0" : : "r"((fpcr & ~FZ_BITS) | FZ_BITS));
+#elif defined(__ARM_NEON) && defined(__arm__)
+    uint32_t fpscr;
+    asm volatile("vmrs %0, fpscr" : "=r"(fpscr));
+    old_fpcr = fpscr;
+    // On AArch32 NEON, FZ is bit 24 of the FPSCR.
+    asm volatile("vmsr fpscr, %0" : : "r"((fpscr & ~(1u << 24)) | (1u << 24)));
+#endif
+}
+
+void restore_denormals_flush()
+{
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
+    _mm_setcsr(old_mxcsr);
+#elif defined(__aarch64__)
+    asm volatile("msr FPCR, %0" : : "r"(old_fpcr));
+#elif defined(__ARM_NEON) && defined(__arm__)
+    asm volatile("vmsr fpscr, %0" : : "r"(static_cast<uint32_t>(old_fpcr)));
+#endif
+}
+
 benchmark_scope::benchmark_scope()
 {
 #ifdef _WIN32
@@ -313,9 +353,11 @@ benchmark_scope::benchmark_scope()
     pthread_get_qos_class_np(pthread_self(), &old_qos_class, &old_qos_relative_priority);
     pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
 #endif
+    enable_denormals_flush();
 }
 benchmark_scope::~benchmark_scope()
 {
+    restore_denormals_flush();
 #ifdef _WIN32
     HANDLE thrd = GetCurrentThread();
     DisableThreadProfiling(thrd);

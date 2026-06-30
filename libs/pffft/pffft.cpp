@@ -23,7 +23,7 @@ template <bool invert, bool inplace>
 class fft_implementation<1, float, true, invert, inplace> : public fft_impl<float>
 {
 public:
-    fft_implementation(sizes_t<1> sizes) : N(sizes[0])
+    fft_implementation(sizes_t<1> sizes, float*, const float*) : N(sizes[0])
     {
         setup = pffft_new_setup(static_cast<int>(N), PFFFT_COMPLEX);
         work  = static_cast<float*>(pffft_aligned_malloc(2 * N * sizeof(float)));
@@ -54,7 +54,7 @@ template <bool inplace>
 class fft_implementation<1, float, false, false, inplace> : public fft_impl<float>
 {
 public:
-    fft_implementation(sizes_t<1> sizes) : N(sizes[0])
+    fft_implementation(sizes_t<1> sizes, float*, const float*) : N(sizes[0])
     {
         setup = pffft_new_setup(static_cast<int>(N), PFFFT_REAL);
         work  = static_cast<float*>(pffft_aligned_malloc(N * sizeof(float)));
@@ -85,7 +85,7 @@ template <bool inplace>
 class fft_implementation<1, float, false, true, inplace> : public fft_impl<float>
 {
 public:
-    fft_implementation(sizes_t<1> sizes) : N(sizes[0])
+    fft_implementation(sizes_t<1> sizes, float*, const float*) : N(sizes[0])
     {
         setup = pffft_new_setup(static_cast<int>(N), PFFFT_REAL);
         work  = static_cast<float*>(pffft_aligned_malloc(N * sizeof(float)));
@@ -111,7 +111,8 @@ private:
 };
 
 template <typename real>
-fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, bool is_complex, bool invert, bool inplace)
+fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, real* out, const real* in, bool is_complex,
+                              bool invert, bool inplace)
 {
     /* unfortunately, the fft size must be a multiple of 16 for complex FFTs
        and 32 for real FFTs -- a lot of stuff would need to be rewritten to
@@ -122,8 +123,10 @@ fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, bool is_complex, 
         return nullptr; // pffft complex transform requires sizes that are multiples of SIMD_SZ^2
     if (!is_complex && (size[0] % (2 * pffft_simd_size() * pffft_simd_size())) != 0)
         return nullptr; // pffft real transform requires sizes that are multiples of 2*SIMD_SZ^2
-    return fft_create_for<fft_implementation, real>(size, is_complex, invert, inplace);
+    return fft_create_for<fft_implementation, real>(size, out, in, is_complex, invert, inplace);
 }
 
-template std::unique_ptr<fft_impl<float>> fft_create<float>(const std::vector<size_t>&, bool, bool, bool);
-template std::unique_ptr<fft_impl<double>> fft_create<double>(const std::vector<size_t>&, bool, bool, bool);
+template std::unique_ptr<fft_impl<float>> fft_create<float>(const std::vector<size_t>&, float*,
+                                                            const float*, bool, bool, bool);
+template std::unique_ptr<fft_impl<double>> fft_create<double>(const std::vector<size_t>&, double*,
+                                                              const double*, bool, bool, bool);

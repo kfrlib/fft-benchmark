@@ -40,7 +40,7 @@ template <bool invert>
 class fft_implementation<1, float, true, invert, false> : public fft_impl<float>
 {
 public:
-    fft_implementation(sizes_t<1> sizes) : N(sizes[0]), fft(log2_exact(sizes[0])) {}
+    fft_implementation(sizes_t<1> sizes, float*, const float*) : N(sizes[0]), fft(log2_exact(sizes[0])) {}
 
     void execute(float* out, const float* in)
     {
@@ -59,7 +59,9 @@ template <>
 class fft_implementation<1, float, false, false, true> : public fft_impl<float>
 {
 public:
-    fft_implementation(sizes_t<1> sizes) : N(sizes[0]), fft(log2_exact(sizes[0])) {}
+    fft_implementation(sizes_t<1> sizes, float* out, const float* in) : N(sizes[0]), fft(log2_exact(sizes[0]))
+    {
+    }
 
     void execute(float* out, const float*) { fft.performRealOnlyForwardTransform(out); }
     fft_scaling scaling() const final { return fft_scaling::inverse_n; }
@@ -74,7 +76,9 @@ template <>
 class fft_implementation<1, float, false, true, true> : public fft_impl<float>
 {
 public:
-    fft_implementation(sizes_t<1> sizes) : N(sizes[0]), fft(log2_exact(sizes[0])) {}
+    fft_implementation(sizes_t<1> sizes, float* out, const float* in) : N(sizes[0]), fft(log2_exact(sizes[0]))
+    {
+    }
 
     void execute(float* out, const float*) { fft.performRealOnlyInverseTransform(out); }
     fft_scaling scaling() const final { return fft_scaling::inverse_n; }
@@ -85,7 +89,8 @@ private:
 };
 
 template <typename real>
-fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, bool is_complex, bool invert, bool inplace)
+fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, real* out, const real* in, bool is_complex,
+                              bool invert, bool inplace)
 {
     // JUCE FFT only supports 1D, power-of-2 sizes
     if (size.size() != 1)
@@ -96,11 +101,13 @@ fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, bool is_complex, 
         return nullptr; // no in-place complex transforms
     if (!is_complex && !inplace)
         return nullptr; // no out-of-place real transforms
-    return fft_create_for<fft_implementation, real>(size, is_complex, invert, inplace);
+    return fft_create_for<fft_implementation, real>(size, out, in, is_complex, invert, inplace);
 }
 
-template std::unique_ptr<fft_impl<float>> fft_create<float>(const std::vector<size_t>&, bool, bool, bool);
-template std::unique_ptr<fft_impl<double>> fft_create<double>(const std::vector<size_t>&, bool, bool, bool);
+template std::unique_ptr<fft_impl<float>> fft_create<float>(const std::vector<size_t>&, float*, const float*,
+                                                            bool, bool, bool);
+template std::unique_ptr<fft_impl<double>> fft_create<double>(const std::vector<size_t>&, double*,
+                                                              const double*, bool, bool, bool);
 
 std::string src_name()
 {

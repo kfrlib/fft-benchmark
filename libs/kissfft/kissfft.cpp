@@ -29,7 +29,7 @@ class fft_implementation<1, real, true, invert, inplace> : public fft_impl<real>
 public:
     using cpx_t = std::complex<real>;
 
-    fft_implementation(sizes_t<1> sizes) : N(sizes[0]), fft(sizes[0], invert)
+    fft_implementation(sizes_t<1> sizes, real*, const real*) : N(sizes[0]), fft(sizes[0], invert)
     {
         if constexpr (inplace)
         {
@@ -64,7 +64,7 @@ class fft_implementation<1, real, false, false, inplace> : public fft_impl<real>
 public:
     using cpx_t = std::complex<real>;
 
-    fft_implementation(sizes_t<1> sizes) : N(sizes[0]), fft(sizes[0] / 2, false)
+    fft_implementation(sizes_t<1> sizes, real*, const real*) : N(sizes[0]), fft(sizes[0] / 2, false)
     {
         if constexpr (inplace)
         {
@@ -95,7 +95,8 @@ private:
 };
 
 template <typename real>
-fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, bool is_complex, bool invert, bool inplace)
+fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, real* out, const real* in, bool is_complex,
+                              bool invert, bool inplace)
 {
     if (size.size() != 1)
         return nullptr; // only 1D transforms are supported
@@ -103,8 +104,10 @@ fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, bool is_complex, 
         return nullptr; // KissFFT does not support real inverse transforms
     if (!is_complex && size[0] % 2 != 0)
         return nullptr; // KissFFT real transform requires even sizes
-    return fft_create_for<fft_implementation, real>(size, is_complex, invert, inplace);
+    return fft_create_for<fft_implementation, real>(size, out, in, is_complex, invert, inplace);
 }
 
-template std::unique_ptr<fft_impl<float>> fft_create<float>(const std::vector<size_t>&, bool, bool, bool);
-template std::unique_ptr<fft_impl<double>> fft_create<double>(const std::vector<size_t>&, bool, bool, bool);
+template std::unique_ptr<fft_impl<float>> fft_create<float>(const std::vector<size_t>&, float*,
+                                                            const float*, bool, bool, bool);
+template std::unique_ptr<fft_impl<double>> fft_create<double>(const std::vector<size_t>&, double*,
+                                                              const double*, bool, bool, bool);

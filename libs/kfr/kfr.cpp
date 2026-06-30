@@ -32,7 +32,7 @@ class fft_implementation<1, real, true, invert, inplace> : public fft_impl<real>
 {
 public:
     PICK;
-    fft_implementation(sizes_t<1> size)
+    fft_implementation(sizes_t<1> size, real*, const real*)
 #ifdef KFR_NG
         : use_ngfft(kfr::is_poweroftwo(size[0]))
     {
@@ -60,10 +60,7 @@ public:
         const kfr::complex<real>* inc = kfr::ptr_cast<kfr::complex<real>>(in);
         if (use_ngfft)
         {
-            // ngFFT is always in-place; copy input to output first
-            if (out != in)
-                std::memcpy(out, in, sizeof(kfr::complex<real>) * (size_t(1) << ngplan.l2fftsize));
-            kfr::ngfft_execute(ngplan, kfr::cbool<invert>, outc);
+            kfr::ngfft_execute(ngplan, kfr::cbool<invert>, outc, inc);
         }
         else
         {
@@ -98,28 +95,96 @@ private:
 #endif
 };
 
-// real
 template <typename real, bool invert, bool inplace>
 class fft_implementation<1, real, false, invert, inplace> : public fft_impl<real>
 {
 public:
     PICK;
-    fft_implementation(sizes_t<1> size)
+    fft_implementation(sizes_t<1> size, real*, const real*)
+#ifdef KFR_NG
+        : use_ngfft(kfr::is_poweroftwo(size[0]) && size[0] > 1)
+    {
+        if (use_ngfft)
+        {
+            ngplan.l2fftsize = static_cast<uint8_t>(kfr::ilog2(size[0]) - 1);
+            ngplan.twiddles  = kfr::aligned_allocate<kfr::complex<real>>(kfr::ngfft_twiddle_count(ngplan));
+            kfr::ngfft_initialize(ngplan);
+        }
+        else
+        {
+            plan = kfr::dft_plan_real<real>(size[0]);
+            temp = kfr::aligned_allocate<unsigned char>(plan.temp_size);
+        }
+    }
+#else
         : plan(size[0]), temp(kfr::aligned_allocate<unsigned char>(plan.temp_size))
     {
     }
+#endif
+
+    real_layout layout() const override
+    {
+#ifdef KFR_NG
+        if (use_ngfft)
+            return real_layout::hc;
+        else
+            return real_layout::ccs;
+#else
+        return real_layout::ccs;
+#endif
+    }
+
     void execute(real* out, const real* in) final
     {
+#ifdef KFR_NG
+        if (use_ngfft)
+        {
+            if constexpr (invert)
+            {
+                ngfft_real_execute(ngplan, out, kfr::ptr_cast<kfr::complex<real>>(in));
+            }
+            else
+            {
+                ngfft_real_execute(ngplan, kfr::ptr_cast<kfr::complex<real>>(out), in);
+            }
+        }
+        else
+        {
+            if constexpr (invert)
+                plan.execute(out, kfr::ptr_cast<kfr::complex<real>>(in), temp, kfr::cbool<invert>);
+            else
+                plan.execute(kfr::ptr_cast<kfr::complex<real>>(out), in, temp, kfr::cbool<invert>);
+        }
+
+#else
         if constexpr (invert)
             plan.execute(out, kfr::ptr_cast<kfr::complex<real>>(in), temp, kfr::cbool<invert>);
         else
             plan.execute(kfr::ptr_cast<kfr::complex<real>>(out), in, temp, kfr::cbool<invert>);
+#endif
     }
-    ~fft_implementation() { kfr::aligned_deallocate(temp); }
+    ~fft_implementation()
+    {
+#ifdef KFR_NG
+        if (use_ngfft)
+            kfr::aligned_deallocate(ngplan.twiddles);
+        else
+            kfr::aligned_deallocate(temp);
+#else
+        kfr::aligned_deallocate(temp);
+#endif
+    }
 
 private:
+#ifdef KFR_NG
+    bool use_ngfft;
+    kfr::ngfft_plan_real<real> ngplan;
+    kfr::dft_plan_real<real> plan;
+    unsigned char* temp = nullptr;
+#else
     kfr::dft_plan_real<real> plan;
     unsigned char* temp;
+#endif
 };
 
 // complex, multidimensional
@@ -128,7 +193,7 @@ class fft_implementation<dims, real, true, invert, inplace> : public fft_impl<re
 {
 public:
     PICK;
-    fft_implementation(sizes_t<dims> sizes)
+    fft_implementation(sizes_t<dims> sizes, real*, const real*)
         : plan(kfr::shape<dims>::from_std_array(sizes)),
           temp(kfr::aligned_allocate<unsigned char>(plan.temp_size))
     {
@@ -151,7 +216,7 @@ class fft_implementation<dims, real, false, invert, inplace> : public fft_impl<r
 {
 public:
     PICK;
-    fft_implementation(sizes_t<dims> sizes)
+    fft_implementation(sizes_t<dims> sizes, real*, const real*)
         : plan(kfr::shape<dims>::from_std_array(sizes), true),
           temp(kfr::aligned_allocate<unsigned char>(plan.temp_size))
     {
@@ -171,7 +236,8 @@ private:
 };
 
 template <typename real>
-fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, bool is_complex, bool invert, bool inplace)
+fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, real* out, const real* in, bool is_complex,
+                              bool invert, bool inplace)
 {
 #ifndef KFR_DFT_SUPPORTS_ODD_REAL
     if (!is_complex)
@@ -181,11 +247,13 @@ fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, bool is_complex, 
             return nullptr; // KFR real transform requires even sizes
     }
 #endif
-    return fft_create_for<fft_implementation, real>(size, is_complex, invert, inplace);
+    return fft_create_for<fft_implementation, real>(size, out, in, is_complex, invert, inplace);
 }
 
-template std::unique_ptr<fft_impl<float>> fft_create<float>(const std::vector<size_t>&, bool, bool, bool);
-template std::unique_ptr<fft_impl<double>> fft_create<double>(const std::vector<size_t>&, bool, bool, bool);
+template std::unique_ptr<fft_impl<float>> fft_create<float>(const std::vector<size_t>&, float*, const float*,
+                                                            bool, bool, bool);
+template std::unique_ptr<fft_impl<double>> fft_create<double>(const std::vector<size_t>&, double*,
+                                                              const double*, bool, bool, bool);
 
 std::string src_name()
 {

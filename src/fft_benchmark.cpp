@@ -124,30 +124,18 @@ template <typename real>
 BENCH_INLINE std::chrono::nanoseconds batch(fft_impl<real>* fft, real* out, const real* in,
                                             unsigned batch_size, bool inplace, size_t real_size)
 {
-    std::chrono::nanoseconds result;
     if (inplace)
     {
-        if (batch_size != 1)
-        {
-            return std::chrono::nanoseconds(0); // In-place batch > 1 not supported
-        }
         memcpy(out, in, sizeof(real) * real_size);
-        bench_start();
-        fft->execute(out, out);
-        dont_optimize(out);
-        result = bench_stop();
+        in = out;
     }
-    else
+    bench_start();
+    for (unsigned i = 0; i < batch_size; ++i)
     {
-        bench_start();
-        for (unsigned i = 0; i < batch_size; ++i)
-        {
-            fft->execute(out, in);
-            dont_optimize(out);
-        }
-        result = bench_stop();
+        fft->execute(out, in);
+        dont_optimize(out);
     }
-    return result;
+    return bench_stop();
 }
 
 template <typename real>
@@ -235,7 +223,11 @@ struct fft_benchmark_runner
     template <bool is_complex, bool inverse, bool inplace>
     static unsigned accuracy_test(size_t size, const double* refout, const double* refin, bool progress)
     {
-        std::unique_ptr<fft_impl<real>> fft = fft_create<real>({ size }, is_complex, inverse, inplace);
+        std::vector<real, aligned_allocator<real>> in(size * 2 + 2);
+        std::vector<real, aligned_allocator<real>> out(size * 2 + 2);
+
+        std::unique_ptr<fft_impl<real>> fft =
+            fft_create<real>({ size }, out.data(), in.data(), is_complex, inverse, inplace);
         if (!fft)
         {
             if (progress)
@@ -263,8 +255,7 @@ struct fft_benchmark_runner
         double err, maxerr = 0;
         if constexpr (inplace)
         {
-            std::vector<real, aligned_allocator<real>> inout(std::max(in_size, out_size));
-            inout.reserve(size * 2 + 2); // For safety
+            auto& inout = out;
             prepare_input(inout.data(), refin, in_size, size, is_complex, inverse, layout);
             fft->execute(inout.data(), inout.data());
             std::tie(err, maxerr) =
@@ -272,10 +263,6 @@ struct fft_benchmark_runner
         }
         else
         {
-            std::vector<real, aligned_allocator<real>> in(in_size);
-            std::vector<real, aligned_allocator<real>> out(out_size);
-            in.reserve(size * 2 + 2); // For safety
-            out.reserve(size * 2 + 2); // For safety
             prepare_input(in.data(), refin, in_size, size, is_complex, inverse, layout);
             fft->execute(out.data(), in.data());
             std::tie(err, maxerr) =
@@ -367,10 +354,6 @@ struct fft_benchmark_runner
 
         size_t size          = product(sizes);
         unsigned cache_level = get_cache_level(size, is_complex, inplace);
-        if (inplace && cache_level < 2)
-        {
-            return; // In-place transforms are not supported for small sizes in this benchmark
-        }
 
         json_open_object();
         json_key("size");
@@ -394,7 +377,12 @@ struct fft_benchmark_runner
         json_key("buffer");
         json_string(inplace_str(inplace));
 
-        std::unique_ptr<fft_impl<real>> fft = fft_create<real>(sizes, is_complex, inverse, inplace);
+        size_t allocation_size = size * 4 + 2;
+        auto in                = aligned_malloc_raii<real>(allocation_size);
+        auto out               = aligned_malloc_raii<real>(allocation_size);
+
+        std::unique_ptr<fft_impl<real>> fft =
+            fft_create<real>(sizes, out.get(), in.get(), is_complex, inverse, inplace);
 
         if (!fft)
         {
@@ -410,12 +398,9 @@ struct fft_benchmark_runner
             return;
         }
 
-        size_t allocation_size = size * 4 + 2;
-        real* in               = aligned_malloc<real>(allocation_size);
-        real* out              = aligned_malloc<real>(allocation_size);
-        size_t real_in_size    = is_complex ? size * 2
-                                 : !inverse ? size
-                                            : real_spectrum_size(size, fft->layout());
+        size_t real_in_size = is_complex ? size * 2
+                              : !inverse ? size
+                                         : real_spectrum_size(size, fft->layout());
         std::chrono::nanoseconds total_duration(0);
         uint64_t total_calls = 0;
         std::vector<double> batch_times; // per-call time (seconds) for each batch
@@ -425,13 +410,12 @@ struct fft_benchmark_runner
         unsigned estimate_calls = 0;
         do
         {
-            prng::generate<true>(in, real_in_size);
-            estimate_duration += batch(fft.get(), out, in, 1, inplace, real_in_size);
+            prng::generate<true>(in.get(), real_in_size);
+            estimate_duration += batch(fft.get(), out.get(), in.get(), 1, inplace, real_in_size);
             estimate_calls++;
         } while (std::chrono::steady_clock::now() - estimate_start < std::chrono::duration<double>(0.005));
         std::chrono::duration<double> est_call_time = estimate_duration / estimate_calls;
-        unsigned batch_size =
-            cache_level >= 2 ? 1 : static_cast<unsigned>(std::max(1.0, ceil(50us / est_call_time)));
+        unsigned batch_size  = static_cast<unsigned>(std::max(1.0, ceil(50us / est_call_time)));
         unsigned num_batches = static_cast<unsigned>(std::max(ceil(50ms / est_call_time) / batch_size, 10.0));
 
         Percentiles percentiles;
@@ -454,13 +438,18 @@ struct fft_benchmark_runner
                     }
                 }
 
-                // Create a new FFT object each time to randomize any internal state
-                fft = fft_create<real>(sizes, is_complex, inverse, inplace);
-                prng::generate<true>(in, real_in_size);
+                if (b % 5 == 0)
+                {
+                    auto in  = aligned_malloc_raii<real>(allocation_size);
+                    auto out = aligned_malloc_raii<real>(allocation_size);
+                    // Create a new FFT object to randomize any internal state
+                    fft = fft_create<real>(sizes, out.get(), in.get(), is_complex, inverse, inplace);
+                }
+                prng::generate<true>(in.get(), real_in_size);
                 // Prewarm the FFT object and buffers with a single execute
-                batch(fft.get(), out, in, 1, inplace, real_in_size);
+                batch(fft.get(), out.get(), in.get(), 1, inplace, real_in_size);
                 std::chrono::nanoseconds batch_duration =
-                    batch(fft.get(), out, in, batch_size, inplace, real_in_size);
+                    batch(fft.get(), out.get(), in.get(), batch_size, inplace, real_in_size);
 
                 total_duration += batch_duration;
                 total_calls += batch_size;
@@ -525,8 +514,6 @@ struct fft_benchmark_runner
         {
             fflush(stdout);
         }
-        aligned_free(in, allocation_size);
-        aligned_free(out, allocation_size);
     }
 };
 

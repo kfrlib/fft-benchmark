@@ -11,6 +11,8 @@
 #include <memory>
 #include <string>
 
+constexpr int mode = FFTW_MEASURE; // FFTW_ESTIMATE
+
 std::string fft_name() { return std::string(fftw_version); }
 
 template <int Dims, typename real, bool is_complex, bool invert, bool inplace>
@@ -35,22 +37,22 @@ public:
     constexpr static auto fn_destroy_plan = pick(fftwf_destroy_plan, fftw_destroy_plan);
     constexpr static auto fn_print_plan   = pick(fftwf_print_plan, fftw_print_plan);
 
-    fft_implementation(sizes_t<dims> sizes)
+    fft_implementation(sizes_t<dims> sizes, real* out_arg, const real* in_arg)
     {
+        auto* in  = reinterpret_cast<Complex*>(inplace ? out_arg : const_cast<real*>(in_arg));
+        auto* out = reinterpret_cast<Complex*>(out_arg);
         if constexpr (dims == 1)
         {
-            plan = fn_plan_dft_1d(sizes[0], nullptr, nullptr, invert ? FFTW_BACKWARD : FFTW_FORWARD,
-                                  FFTW_ESTIMATE);
+            plan = fn_plan_dft_1d(sizes[0], in, out, invert ? FFTW_BACKWARD : FFTW_FORWARD, mode);
         }
         else if constexpr (dims == 2)
         {
-            plan = fn_plan_dft_2d(sizes[0], sizes[1], nullptr, nullptr, invert ? FFTW_BACKWARD : FFTW_FORWARD,
-                                  FFTW_ESTIMATE);
+            plan = fn_plan_dft_2d(sizes[0], sizes[1], in, out, invert ? FFTW_BACKWARD : FFTW_FORWARD, mode);
         }
         else if constexpr (dims == 3)
         {
-            plan = fn_plan_dft_3d(sizes[0], sizes[1], sizes[2], nullptr, nullptr,
-                                  invert ? FFTW_BACKWARD : FFTW_FORWARD, FFTW_ESTIMATE);
+            plan = fn_plan_dft_3d(sizes[0], sizes[1], sizes[2], in, out,
+                                  invert ? FFTW_BACKWARD : FFTW_FORWARD, mode);
         }
     }
 
@@ -77,19 +79,21 @@ public:
     constexpr static auto fn_destroy_plan    = pick(fftwf_destroy_plan, fftw_destroy_plan);
     constexpr static auto fn_print_plan      = pick(fftwf_print_plan, fftw_print_plan);
 
-    fft_implementation(sizes_t<dims> sizes)
+    fft_implementation(sizes_t<dims> sizes, real* out_arg, const real* in_arg)
     {
+        auto* in  = inplace ? out_arg : const_cast<real*>(in_arg);
+        auto* out = reinterpret_cast<Complex*>(out_arg);
         if constexpr (dims == 1)
         {
-            plan = fn_plan_dft_r2c_1d(sizes[0], nullptr, nullptr, FFTW_ESTIMATE);
+            plan = fn_plan_dft_r2c_1d(sizes[0], in, out, mode);
         }
         else if constexpr (dims == 2)
         {
-            plan = fn_plan_dft_r2c_2d(sizes[0], sizes[1], nullptr, nullptr, FFTW_ESTIMATE);
+            plan = fn_plan_dft_r2c_2d(sizes[0], sizes[1], in, out, mode);
         }
         else if constexpr (dims == 3)
         {
-            plan = fn_plan_dft_r2c_3d(sizes[0], sizes[1], sizes[2], nullptr, nullptr, FFTW_ESTIMATE);
+            plan = fn_plan_dft_r2c_3d(sizes[0], sizes[1], sizes[2], in, out, mode);
         }
     }
 
@@ -116,19 +120,21 @@ public:
     constexpr static auto fn_destroy_plan    = pick(fftwf_destroy_plan, fftw_destroy_plan);
     constexpr static auto fn_print_plan      = pick(fftwf_print_plan, fftw_print_plan);
 
-    fft_implementation(sizes_t<dims> sizes)
+    fft_implementation(sizes_t<dims> sizes, real* out_arg, const real* in_arg)
     {
+        auto* in  = reinterpret_cast<Complex*>(inplace ? out_arg : const_cast<real*>(in_arg));
+        auto* out = out_arg;
         if constexpr (dims == 1)
         {
-            plan = fn_plan_dft_c2r_1d(sizes[0], nullptr, nullptr, FFTW_ESTIMATE);
+            plan = fn_plan_dft_c2r_1d(sizes[0], in, out, mode);
         }
         else if constexpr (dims == 2)
         {
-            plan = fn_plan_dft_c2r_2d(sizes[0], sizes[1], nullptr, nullptr, FFTW_ESTIMATE);
+            plan = fn_plan_dft_c2r_2d(sizes[0], sizes[1], in, out, mode);
         }
         else if constexpr (dims == 3)
         {
-            plan = fn_plan_dft_c2r_3d(sizes[0], sizes[1], sizes[2], nullptr, nullptr, FFTW_ESTIMATE);
+            plan = fn_plan_dft_c2r_3d(sizes[0], sizes[1], sizes[2], in, out, mode);
         }
     }
 
@@ -140,10 +146,13 @@ private:
 };
 
 template <typename real>
-fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, bool is_complex, bool invert, bool inplace)
+fft_impl_ptr<real> fft_create(const std::vector<size_t>& size, real* out, const real* in, bool is_complex,
+                              bool invert, bool inplace)
 {
-    return fft_create_for<fft_implementation, real>(size, is_complex, invert, inplace);
+    return fft_create_for<fft_implementation, real>(size, out, in, is_complex, invert, inplace);
 }
 
-template std::unique_ptr<fft_impl<float>> fft_create<float>(const std::vector<size_t>&, bool, bool, bool);
-template std::unique_ptr<fft_impl<double>> fft_create<double>(const std::vector<size_t>&, bool, bool, bool);
+template std::unique_ptr<fft_impl<float>> fft_create<float>(const std::vector<size_t>&, float*, const float*,
+                                                            bool, bool, bool);
+template std::unique_ptr<fft_impl<double>> fft_create<double>(const std::vector<size_t>&, double*,
+                                                              const double*, bool, bool, bool);

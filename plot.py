@@ -20,19 +20,18 @@ markers = [
 
 # Define unique styles for each dataset
 styles = [
-    dict(color="#A8021D", marker=markers[0], **common_style),
+    dict(color='#7FB800', marker=markers[0], **common_style),
+    # dict(color="#08BF1A", marker=markers[1], **common_style),
     dict(color='#36cccc', marker=markers[2], **common_style),
-    dict(color='#00A6ED', marker=markers[1], **common_style),
+    dict(color='#00A6ED', marker=markers[0], **common_style),
+    dict(color='#e9c46a', marker=markers[1], **common_style),
+    dict(color="#EF3000", marker=markers[2], **common_style),
     dict(color='#FFB400', marker=markers[0], **common_style),
-    # dict(color="#FF8964", marker=markers[2], **common_style),
-    dict(color="#EF3608", marker=markers[1], **common_style),
-    dict(color='#e9c46a', marker=markers[0], **common_style),
-    dict(color='#983fd3', marker=markers[1], **common_style),
+    dict(color="#bf3fd3", marker=markers[1], **common_style),
     dict(color='#db37af', marker=markers[2], **common_style),
     dict(color='#5430e4', marker=markers[0], **common_style),
-    dict(color='#7FB800', marker=markers[1], **common_style),
-    dict(color="#d4388b", marker=markers[2], **common_style),
-    dict(color='#2a9d8f', marker=markers[0], **common_style),
+    dict(color="#A88102", marker=markers[1], **common_style),
+    dict(color="#BCCC08", marker=markers[2], **common_style),
 ]
 
 # Function to plot the data
@@ -166,7 +165,7 @@ for data in ['float', 'double']:
             gflops_max = max(
                 x for x in [x.get('gflops') for x in filtered_results] if x is not None
             )
-            topy = math.ceil(gflops_max / 10.0) * 10.0
+            topy = math.ceil(gflops_max / 5.0) * 5.0
 
             # Iterate over FFT directions and buffer types
             for direction in ['forward', 'inverse']:
