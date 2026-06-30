@@ -3,6 +3,7 @@ from matplotlib.ticker import MultipleLocator
 import json
 import numpy as np
 import math
+import os
 import sys
 
 common_style = {
@@ -94,6 +95,9 @@ if len(files) == 0:
     sys.exit("No input files supplied. Example: \npython plot.py data1.json data2.json … dataN.json")
 
 print("Processing files: ", files)
+
+# Ensure the output directory exists
+os.makedirs('plots', exist_ok=True)
 
 # Load JSON data from the input files
 results = [json.load(open(f)) for f in files]

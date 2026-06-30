@@ -43,6 +43,11 @@ jobs:
             echo "=== $bin ==="
             "$bin"  --accuracy --no-banner --complex y --inverse n --inplace n 4096
           done
+      - name: Package extras
+        run: |
+          cp README.md "${{ github.workspace }}/dist/"
+          cp *.py "${{ github.workspace }}/dist/"
+          cp -r plans "${{ github.workspace }}/dist/"
       - name: Binaries
         uses: actions/upload-artifact@v4
         with:
@@ -90,6 +95,11 @@ jobs:
             echo "=== $bin ==="
             "$bin"  --accuracy --no-banner --complex y --inverse n --inplace n 4096
           done
+      - name: Package extras
+        run: |
+          cp README.md "${{ github.workspace }}/dist/"
+          cp *.py "${{ github.workspace }}/dist/"
+          cp -r plans "${{ github.workspace }}/dist/"
       - name: Binaries
         uses: actions/upload-artifact@v4
         with:
@@ -129,6 +139,11 @@ jobs:
             echo "=== $bin ==="
             "$bin"  --accuracy --no-banner --complex y --inverse n --inplace n 4096
           done
+      - name: Package extras
+        run: |
+          cp README.md "${{ github.workspace }}/dist/"
+          cp *.py "${{ github.workspace }}/dist/"
+          cp -r plans "${{ github.workspace }}/dist/"
       - name: Binaries
         uses: actions/upload-artifact@v4
         with:
@@ -168,6 +183,11 @@ jobs:
             Write-Host "=== $($_.Name) ==="
             & $_.FullName  --accuracy --no-banner --complex y --inverse n --inplace n 4096
           }
+      - name: Package extras
+        run: |
+          Copy-Item README.md "${{ github.workspace }}\dist"
+          Copy-Item *.py "${{ github.workspace }}\dist"
+          Copy-Item plans "${{ github.workspace }}\dist\plans" -Recurse
       - name: Binaries
         uses: actions/upload-artifact@v4
         with:

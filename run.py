@@ -66,7 +66,7 @@ def main():
             print(f"Run {run}/{runs}")
             print("################################")
 
-        for bench in sorted(Path("build").glob(f"fft_benchmark_*{suffix}")):
+        for bench in sorted(Path(".").rglob(f"fft_benchmark_*{suffix}")):
             if not bench.is_file():
                 continue
 
@@ -110,7 +110,7 @@ def main():
             found = True
 
     if not found:
-        print("Warning: No benchmark executables found in build/")
+        print("Warning: No benchmark executables found in current directory or its subdirectories")
 
 
 if __name__ == "__main__":
