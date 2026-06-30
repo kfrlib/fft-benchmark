@@ -105,7 +105,7 @@ def main():
             print("================================")
             print(f"Running benchmark for {libtag} (run {run}/{runs})...")
 
-            cmd = [str(bench), "--save", str(outfile), "--no-banner", *bench_args]
+            cmd = [str(bench.resolve()), "--save", str(outfile), "--no-banner", *bench_args]
             subprocess.run(cmd, check=True)
             found = True
 
