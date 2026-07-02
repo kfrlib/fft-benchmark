@@ -1,5 +1,7 @@
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MultipleLocator
+import argparse
+import glob
 import json
 import numpy as np
 import math
@@ -26,6 +28,7 @@ styles = [
     dict(color='#36cccc', marker=markers[2], **common_style),
     dict(color='#00A6ED', marker=markers[0], **common_style),
     dict(color='#e9c46a', marker=markers[1], **common_style),
+    dict(color="#FFB5A3", marker=markers[2], **common_style),
     dict(color="#EF3000", marker=markers[2], **common_style),
     dict(color='#FFB400', marker=markers[0], **common_style),
     dict(color="#bf3fd3", marker=markers[1], **common_style),
@@ -36,7 +39,7 @@ styles = [
 ]
 
 # Function to plot the data
-def plot(data, ticks, labels, title, topy, file=None):
+def plot(data, ticks, labels, title, topy, file=None, subtitle=None):
     # Define common styles for the plot
 
     # Define grid style
@@ -80,7 +83,11 @@ def plot(data, ticks, labels, title, topy, file=None):
     if x is not None:  # Ensure x is defined before using it
         ticks = ticks[:len(x)]
         plt.xticks(x, ticks, rotation='vertical')
-    plt.title(title)
+    if subtitle:
+        fig.suptitle(subtitle, fontsize=10, x=0.99, ha='right')
+        plt.title(title)
+    else:
+        plt.title(title)
     plt.tight_layout()
 
     # Save the plot to a file or display it
@@ -89,15 +96,42 @@ def plot(data, ticks, labels, title, topy, file=None):
     else:
         plt.savefig(file, dpi=192)
 
-# Get input files from command-line arguments
-files = sys.argv[1:]
-if len(files) == 0:
+# Parse command-line arguments
+parser = argparse.ArgumentParser(
+    description="Plot FFT benchmark results from one or more JSON files."
+)
+parser.add_argument(
+    '--outdir',
+    default='plots',
+    help="Directory where plots are saved (default: 'plots').",
+)
+parser.add_argument(
+    'json_files',
+    nargs='+',
+    metavar='json_file_or_glob_mask',
+    help="One or more JSON result files or glob patterns (e.g. 'data/*.json').",
+)
+args = parser.parse_args()
+
+# Expand glob patterns into concrete file lists, preserving order and removing duplicates.
+files = []
+seen = set()
+for pattern in args.json_files:
+    matches = sorted(glob.glob(pattern))
+    if not matches:
+        sys.exit(f"No files matched pattern: {pattern!r}")
+    for m in matches:
+        if m not in seen:
+            seen.add(m)
+            files.append(m)
+
+if not files:
     sys.exit("No input files supplied. Example: \npython plot.py data1.json data2.json … dataN.json")
 
 print("Processing files: ", files)
 
 # Ensure the output directory exists
-os.makedirs('plots', exist_ok=True)
+os.makedirs(args.outdir, exist_ok=True)
 
 # Load JSON data from the input files
 results = [json.load(open(f)) for f in files]
@@ -196,6 +230,9 @@ for data in ['float', 'double']:
                     print("Generating plot: ", title)
 
                     # Generate the plot
-                    plot(values, sizes, libraries, title, topy, 'plots/' + title + '.svg')
+                    cpu = results[0].get('cpu') if results else None
+                    plot(values, sizes, libraries, title, topy,
+                         os.path.join(args.outdir, title + '.png'),
+                         subtitle=cpu)
         except Exception as e:
             print(f"Error processing {data}-{type}: {e}")            
