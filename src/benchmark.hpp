@@ -404,8 +404,7 @@ struct batch_result
     uint64_t flops = 0; // flops per call for the reference algorithm (0 = not provided)
 };
 
-inline void batch_print(const batch_result& result, const char* label,
-                        std::initializer_list<const char*> names)
+inline void batch_print(const batch_result& result, const char* label, const std::vector<const char*>& names)
 {
     printf("\033[36m");
     printf("Label: %s\n", label);
