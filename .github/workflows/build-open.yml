@@ -173,7 +173,7 @@ jobs:
             ${{ github.workspace }}/vcpkg/buildtrees
 
   macos-arm64:
-    runs-on: macos-14
+    runs-on: macos-latest
     env:
       VCPKG_FEATURE_FLAGS: manifests
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-cache
